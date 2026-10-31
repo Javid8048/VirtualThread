@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+/* User-Friendly Sleek Scrollbar for landing page and studio panels */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.8);
+}
+
+.dark ::-webkit-scrollbar-thumb,
+:root[class~="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+}
+.dark ::-webkit-scrollbar-thumb:hover,
+:root[class~="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.85);
+}
+
+/* Range input styling */
+input[type="range"] {
+  @apply accent-brand-500 bg-studio-800 rounded-lg cursor-pointer h-1.5;
+}
+
+/* Studio Canvas Container */
+canvas:focus {
+  outline: none;
+}
+
+/* BestWebsite.Gallery Editorial Typography Utilities */
+.font-editorial {
+  font-family: 'Fraunces', Georgia, serif;
+}
+
+.font-mono-code {
+  font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+}

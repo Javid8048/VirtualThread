@@ -1,0 +1,1307 @@
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  X,
+  Camera,
+  Video,
+  Download,
+  CheckCircle,
+  Loader2,
+  Sparkles,
+  Smartphone,
+  Monitor,
+  Square,
+  Clock,
+  Film,
+  StopCircle,
+  Palette,
+  Minus,
+  Plus,
+  RotateCw,
+  Box,
+  Gauge,
+  FileText,
+  Share2,
+  Copy,
+  Check
+} from 'lucide-react';
+import { CanvasVideoRecorder } from '../utils/videoRecorder';
+import { GARMENT_PRODUCTS } from './ProductsCatalogModal';
+
+let activeVideoRecorderInstance = null;
+
+export function ExportPanel({
+  isOpen = true,
+  onClose,
+  defaultTab = 'video',
+  sceneManager,
+  backdropMode = 'dark',
+  asyncExportState,
+  setAsyncExportState
+}) {
+  const [activeTab, setActiveTab] = useState(defaultTab); // 'video' | 'image' | 'gltf' | 'techpack'
+  const [imageRes, setImageRes] = useState('4k');
+  const [imageFormat, setImageFormat] = useState('png'); // 'png' | 'jpg'
+  const [isGeneratingTechPack, setIsGeneratingTechPack] = useState(false);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [printArtworkSide, setPrintArtworkSide] = useState('front');
+  const [isExportingDual, setIsExportingDual] = useState(false);
+
+  useEffect(() => {
+    if (defaultTab) setActiveTab(defaultTab);
+  }, [defaultTab]);
+
+  // Video recording state
+  const [videoFps, setVideoFps] = useState(30); // 30 | 60 | 24 - Default is 30 for silky-smooth motion
+  const [videoFormat, setVideoFormat] = useState('desktop'); // 'mobile' | 'desktop' | 'square'
+  const [videoMotion, setVideoMotion] = useState('current'); // 'current' | 'showcase360'
+  const [preferredFormat, setPreferredFormat] = useState('webm'); // 'webm' | 'mp4'
+  const [videoDuration, setVideoDuration] = useState(5); // in seconds: 1 to 30
+  const [isRecording, setIsRecording] = useState(() => (activeVideoRecorderInstance?.isRecording || Boolean(asyncExportState?.isRecording)));
+  const [recordingProgress, setRecordingProgress] = useState(() => asyncExportState?.progress || 0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => asyncExportState?.elapsedSec || 0);
+  const [recordedSuccess, setRecordedSuccess] = useState(() => asyncExportState?.status === 'complete');
+  const [lastRecordedFile, setLastRecordedFile] = useState(() => asyncExportState?.fileName || null);
+  const [isExportingGLTF, setIsExportingGLTF] = useState(false);
+  const [hasAcceptedAup, setHasAcceptedAup] = useState(true);
+
+  const recorderRef = useRef(null);
+
+  // Sync with global async export state if updated outside
+  useEffect(() => {
+    if (asyncExportState) {
+      if (typeof asyncExportState.isRecording === 'boolean') {
+        setIsRecording(asyncExportState.isRecording);
+      }
+      if (typeof asyncExportState.progress === 'number') {
+        setRecordingProgress(asyncExportState.progress);
+      }
+      if (typeof asyncExportState.elapsedSec === 'number') {
+        setElapsedSeconds(asyncExportState.elapsedSec);
+      }
+      if (asyncExportState.status === 'complete') {
+        setRecordedSuccess(true);
+        if (asyncExportState.fileName) setLastRecordedFile(asyncExportState.fileName);
+      }
+    }
+  }, [asyncExportState]);
+
+  if (!isOpen) return null;
+
+  const handleDownloadSnapshot = () => {
+    if (!sceneManager) return;
+
+    let width = 3840;
+    let height = 2160;
+
+    if (imageRes === '4k') {
+      width = 3840;
+      height = 2160;
+    } else if (imageRes === 'mobile') {
+      width = 1080;
+      height = 1920;
+    } else if (imageRes === '2k_square') {
+      width = 2048;
+      height = 2048;
+    } else if (imageRes === '1080p') {
+      width = 1920;
+      height = 1080;
+    }
+
+    const isTransparent = imageFormat === 'png';
+    const dataUrl = sceneManager.captureSnapshot(width, height, isTransparent);
+
+    // Trigger download
+    const link = document.createElement('a');
+    link.download = `virtualthreads-${imageRes}-${Date.now()}.${imageFormat}`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadDualViews = async () => {
+    if (!sceneManager) return;
+    setIsExportingDual(true);
+    try {
+      let width = 3840;
+      let height = 2160;
+      if (imageRes === '1080p') { width = 1920; height = 1080; }
+      else if (imageRes === 'mobile') { width = 1080; height = 1920; }
+      else if (imageRes === '2k_square') { width = 2048; height = 2048; }
+
+      const isTransparent = imageFormat === 'png';
+
+      // 1. Front View
+      await sceneManager.setCameraPreset('front');
+      await new Promise((r) => setTimeout(r, 350));
+      const frontUrl = sceneManager.captureSnapshot(width, height, isTransparent);
+      const link1 = document.createElement('a');
+      link1.download = `garment-front-${Date.now()}.${imageFormat}`;
+      link1.href = frontUrl;
+      document.body.appendChild(link1);
+      link1.click();
+      document.body.removeChild(link1);
+
+      // 2. Back View
+      await sceneManager.setCameraPreset('back');
+      await new Promise((r) => setTimeout(r, 350));
+      const backUrl = sceneManager.captureSnapshot(width, height, isTransparent);
+      const link2 = document.createElement('a');
+      link2.download = `garment-back-${Date.now()}.${imageFormat}`;
+      link2.href = backUrl;
+      document.body.appendChild(link2);
+      link2.click();
+      document.body.removeChild(link2);
+    } catch (e) {
+      console.error('Dual view export failed:', e);
+    } finally {
+      setIsExportingDual(false);
+    }
+  };
+
+  const handleDownloadPrintReady = () => {
+    const dm = sceneManager?.designManager;
+    if (!dm) return;
+    const dataUrl = dm.exportPrintReadyArtwork(printArtworkSide);
+    if (!dataUrl) return;
+    const link = document.createElement('a');
+    link.download = `print-ready-artwork-${printArtworkSide}-${Date.now()}.png`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleStartRecording = async () => {
+    if (!sceneManager || !sceneManager.renderer) return;
+
+    const numDuration = Number(videoDuration);
+    setIsRecording(true);
+    setRecordingProgress(0);
+    setElapsedSeconds(0);
+    setRecordedSuccess(false);
+    setLastRecordedFile(null);
+
+    if (setAsyncExportState) {
+      setAsyncExportState({
+        isRecording: true,
+        progress: 0,
+        elapsedSec: 0,
+        duration: numDuration,
+        status: 'recording',
+        fileName: null
+      });
+    }
+
+    try {
+      const recorder = new CanvasVideoRecorder(sceneManager);
+      activeVideoRecorderInstance = recorder;
+      recorderRef.current = recorder;
+
+      const result = await recorder.startRecording(
+        {
+          fps: Number(videoFps) || 24,
+          durationSeconds: numDuration,
+          format: videoFormat,
+          motion: videoMotion,
+          preferredFormat: preferredFormat,
+          backgroundColor: null
+        },
+        (pct, sec) => {
+          setRecordingProgress(pct);
+          setElapsedSeconds(sec);
+          if (setAsyncExportState) {
+            setAsyncExportState((prev) => ({
+              ...prev,
+              isRecording: true,
+              progress: pct,
+              elapsedSec: sec,
+              duration: numDuration,
+              status: 'recording'
+            }));
+          }
+        }
+      );
+
+      const ext = result.isMp4 ? 'mp4' : 'webm';
+      const filename = `virtualthreads-${videoFormat}-${numDuration}s-${Date.now()}.${ext}`;
+      recorder.downloadBlob(result.blob, filename);
+      setLastRecordedFile(filename);
+      setRecordedSuccess(true);
+
+      if (setAsyncExportState) {
+        setAsyncExportState({
+          isRecording: false,
+          progress: 100,
+          elapsedSec: numDuration,
+          duration: numDuration,
+          status: 'complete',
+          fileName: filename
+        });
+      }
+    } catch (err) {
+      console.error('Recording failed:', err);
+      if (setAsyncExportState) {
+        setAsyncExportState({
+          isRecording: false,
+          progress: 0,
+          elapsedSec: 0,
+          duration: numDuration,
+          status: 'error',
+          fileName: null
+        });
+      }
+      alert('Video recording error: ' + (err.message || err));
+    } finally {
+      setIsRecording(false);
+      activeVideoRecorderInstance = null;
+      recorderRef.current = null;
+    }
+  };
+
+  const handleStopEarly = () => {
+    if (activeVideoRecorderInstance) {
+      activeVideoRecorderInstance.stopEarly();
+    } else if (recorderRef.current) {
+      recorderRef.current.stopEarly();
+    }
+    setIsRecording(false);
+  };
+
+  const handleDurationChange = (val) => {
+    const num = Math.max(1, Math.min(30, Number(val) || 1));
+    setVideoDuration(num);
+  };
+
+  const handleCopyShareLink = () => {
+    if (!sceneManager) return;
+    try {
+      const gType = sceneManager.garmentType || 'oversized_tee';
+      const gColor = sceneManager.garmentColor || '#ffffff';
+      const layers = sceneManager.designManager?.layers || [];
+      const state = {
+        g: gType,
+        c: gColor,
+        l: layers.map((l) => ({
+          t: l.type,
+          s: l.side,
+          txt: l.text,
+          tc: l.textColor,
+          fs: l.fontSize,
+          ff: l.fontFamily,
+          x: l.x,
+          y: l.y,
+          sc: l.scale,
+          r: l.rotation,
+          op: l.opacity,
+          pt: l.printType,
+          img: typeof l.image === 'string' ? l.image : (l.image?.src || null)
+        }))
+      };
+      const json = JSON.stringify(state);
+      const encoded = btoa(encodeURIComponent(json));
+      const url = new URL(window.location.href);
+      url.searchParams.set('page', 'studio');
+      url.searchParams.set('garment', gType);
+      url.searchParams.set('design', encoded);
+
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url.toString());
+      }
+      setShareLinkCopied(true);
+      setTimeout(() => setShareLinkCopied(false), 3000);
+    } catch (err) {
+      console.error('Failed to copy share link:', err);
+    }
+  };
+
+  const handleDownloadTechPack = async () => {
+    if (!sceneManager) return;
+    setIsGeneratingTechPack(true);
+
+    try {
+      const gType = sceneManager.garmentType || 'oversized_tee';
+      const gColor = sceneManager.garmentColor || '#ffffff';
+      const product = GARMENT_PRODUCTS.find((p) => p.id === gType) || {
+        title: gType.toUpperCase().replace('_', ' '),
+        category: 'Streetwear'
+      };
+      const layers = sceneManager.designManager?.layers || [];
+
+      // Capture dual 3D snapshots
+      const frontDataUrl = sceneManager.captureGarmentSnapshot ? sceneManager.captureGarmentSnapshot('front', 800, 800) : null;
+      const backDataUrl = sceneManager.captureGarmentSnapshot ? sceneManager.captureGarmentSnapshot('back', 800, 800) : null;
+
+      const loadImage = (src) => new Promise((resolve) => {
+        if (!src) return resolve(null);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+      });
+
+      const [frontImg, backImg] = await Promise.all([
+        loadImage(frontDataUrl),
+        loadImage(backDataUrl)
+      ]);
+
+      // Create 2400 x 1600 Tech Pack Canvas
+      const cvs = document.createElement('canvas');
+      cvs.width = 2400;
+      cvs.height = 1600;
+      const ctx = cvs.getContext('2d');
+
+      // 1. White Background & Margin
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 2400, 1600);
+
+      // 2. Top Header Banner
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(40, 40, 2320, 140);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 38px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('VIRTUALTHREADS STUDIO — APPAREL TECH PACK SPECIFICATION', 70, 105);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = 'bold 20px monospace';
+      const skuId = `VT-${gType.toUpperCase().substring(0, 4)}-${Date.now().toString().slice(-4)}`;
+      ctx.fillText(`STYLE SKU: ${skuId}   DATE: ${new Date().toISOString().split('T')[0]}   STAGE: READY FOR PRODUCTION`, 70, 145);
+
+      // 3. Garment Information Panel (Left Column)
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(40, 210, 680, 500);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(40, 210, 680, 500);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('1. GARMENT SILHOUETTE & FABRIC', 65, 255);
+
+      ctx.font = '19px sans-serif';
+      ctx.fillStyle = '#334155';
+      ctx.fillText(`Style Name: ${product.title.replace(' STUDIO', '')}`, 65, 305);
+      ctx.fillText(`Category: ${product.category || 'Streetwear'}`, 65, 345);
+      ctx.fillText(`Fit Specification: Relaxed Streetwear Oversized Silhouette`, 65, 385);
+      ctx.fillText(`Fabric Construction: Heavyweight Ringspun Cotton Fleece`, 65, 425);
+      ctx.fillText(`Weight: 380 - 420 GSM Pre-Shrunk`, 65, 465);
+
+      // Color Swatch Box
+      ctx.fillText('Primary Fabric Dye:', 65, 520);
+      ctx.fillStyle = gColor;
+      ctx.fillRect(65, 545, 90, 50);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(65, 545, 90, 50);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText(`HEX: ${gColor.toUpperCase()}`, 175, 578);
+
+      // 4. Visual Render Displays (Center & Right: Front & Back)
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(750, 210, 1610, 500);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(750, 210, 1610, 500);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('2. VISUAL SPECIFICATION: DUAL 3D PROJECTION', 780, 255);
+
+      if (frontImg) {
+        ctx.drawImage(frontImg, 860, 280, 400, 400);
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 18px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('FRONT VIEW', 1060, 695);
+        ctx.textAlign = 'left';
+      }
+
+      if (backImg) {
+        ctx.drawImage(backImg, 1600, 280, 400, 400);
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 18px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('BACK VIEW', 1800, 695);
+        ctx.textAlign = 'left';
+      }
+
+      // 5. Decal & Print Matrix (Bottom Table)
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(40, 740, 2320, 600);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(40, 740, 2320, 600);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('3. ARTWORK & PRINT FINISH SPECIFICATION MATRIX', 65, 785);
+
+      // Table Header Row
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(65, 810, 2270, 45);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 17px sans-serif';
+      ctx.fillText('#', 80, 840);
+      ctx.fillText('PANEL / SIDE', 130, 840);
+      ctx.fillText('ARTWORK TYPE', 360, 840);
+      ctx.fillText('PRINT FINISH & TEXTURE', 680, 840);
+      ctx.fillText('PRINT COORDINATES (X, Y)', 1180, 840);
+      ctx.fillText('SCALE FACTOR', 1600, 840);
+      ctx.fillText('COLOR / SPEC', 1900, 840);
+
+      // Table Rows
+      if (layers.length === 0) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'italic 18px sans-serif';
+        ctx.fillText('No graphic decals applied — Plain garment manufacturing blank.', 80, 900);
+      } else {
+        layers.slice(0, 7).forEach((l, idx) => {
+          const rowY = 885 + idx * 45;
+          ctx.fillStyle = idx % 2 === 0 ? '#ffffff' : '#f1f5f9';
+          ctx.fillRect(65, rowY - 25, 2270, 40);
+
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 17px monospace';
+          ctx.fillText(`0${idx + 1}`, 80, rowY);
+
+          ctx.font = '16px sans-serif';
+          ctx.fillText((l.side || 'front').toUpperCase() + ' CHEST/TORSO', 130, rowY);
+          ctx.fillText(l.type === 'text' ? `Text: "${l.text}"` : 'Raster / Vector Graphic', 360, rowY);
+
+          const finishNames = {
+            screen: 'Standard Screen Print (Plastisol)',
+            puff: 'Tactile 3D Raised Puff Print (Relief 2mm)',
+            embroidery: 'High-Density Satin Embroidery Thread',
+            metallic: 'Shimmering Metallic Gold/Silver Foil Leaf',
+            gloss: 'High-Gloss Wet Silicone Gel Print'
+          };
+          ctx.fillText(finishNames[l.printType] || 'Direct Screen Print', 680, rowY);
+
+          ctx.font = '16px monospace';
+          ctx.fillText(`X: ${l.x} px  |  Y: ${l.y} px`, 1180, rowY);
+          ctx.fillText(`${Math.round((l.scale || 1.0) * 100)}% (${Math.round((l.scale || 1.0) * 28)} cm width)`, 1600, rowY);
+
+          ctx.fillText(l.type === 'text' ? (l.textColor || '#000000').toUpperCase() : 'Full Color CMYK', 1900, rowY);
+        });
+      }
+
+      // 6. Quality Assurance & Factory Notes Footer
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(40, 1370, 2320, 190);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('4. PRODUCTION & QUALITY ASSURANCE NOTES', 70, 1415);
+
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('• Wash Care: Machine wash cold 30°C inside out. Hang dry only. Do not iron directly on decoration.', 70, 1455);
+      ctx.fillText('• Curing Guidelines: Plastisol/Puff inks require heat cure at 160°C (320°F) for 60 seconds.', 70, 1490);
+      ctx.fillText('• Placement Tolerance: Artwork alignment allowable tolerance: ± 0.5 cm from center collar seam line.', 70, 1525);
+
+      // Trigger download
+      const link = document.createElement('a');
+      link.download = `techpack-${gType}-${skuId}.png`;
+      link.href = cvs.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setIsGeneratingTechPack(false);
+    } catch (err) {
+      console.error('Tech pack generation failed:', err);
+      setIsGeneratingTechPack(false);
+      alert('Error generating Tech Pack: ' + err.message);
+    }
+  };
+
+  return (
+    <aside
+      data-export-panel="true"
+      className="fixed bottom-0 left-0 right-0 sm:absolute sm:right-6 sm:top-20 sm:bottom-6 sm:left-auto w-full sm:w-[350px] max-w-[calc(100vw-24px)] max-h-[82vh] sm:max-h-[calc(100vh-84px)] bg-white dark:bg-studio-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-200/90 dark:border-studio-700/80 flex flex-col overflow-hidden select-none z-40 sm:z-30 transition-all animate-fadeIn"
+    >
+      {/* Mobile Swipe / Drag Handle Bar */}
+      <div className="w-12 h-1 bg-gray-300 dark:bg-studio-600 rounded-full mx-auto my-1.5 sm:hidden shrink-0" />
+
+      {/* Top Header: Export Studio Branding */}
+      <div className="flex items-center justify-between px-4 pt-2.5 pb-2.5 bg-gray-50/90 dark:bg-studio-850/90 border-b border-gray-200/80 dark:border-studio-700/60 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-brand-500/15 text-brand-500 border border-brand-500/25">
+            <Sparkles className="size-3.5" />
+          </div>
+          <div>
+            <h3 className="text-xs font-extrabold text-gray-900 dark:text-white leading-tight">Export Studio</h3>
+            <p className="text-[9px] text-gray-500 dark:text-studio-400">HD Video (24/30/60 FPS), 4K & 3D models</p>
+          </div>
+        </div>
+
+        {/* Close Button: Always enabled for asynchronous background export */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors p-1.5 rounded-lg hover:bg-gray-200/60 dark:hover:bg-studio-800"
+          title={isRecording ? "Run Export in Background (Close Panel)" : "Close Export Panel"}
+        >
+          <X className="size-4 stroke-[2.5]" />
+        </button>
+      </div>
+
+      {/* Subtabs: Video Recording vs 4K Snapshot vs 3D Model */}
+      <div className="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-studio-900 border-b border-gray-100 dark:border-studio-800 shrink-0">
+        <button
+          disabled={isRecording}
+          onClick={() => setActiveTab('video')}
+          className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all ${
+            activeTab === 'video'
+              ? 'bg-brand-500 text-white shadow-sm shadow-brand-500/25'
+              : 'bg-gray-100 dark:bg-studio-800 text-gray-600 dark:text-studio-300 hover:bg-gray-200/70 dark:hover:bg-studio-750'
+          }`}
+        >
+          <Video className="size-3" />
+          <span>Video</span>
+        </button>
+
+        <button
+          disabled={isRecording}
+          onClick={() => setActiveTab('image')}
+          className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all ${
+            activeTab === 'image'
+              ? 'bg-brand-500 text-white shadow-sm shadow-brand-500/25'
+              : 'bg-gray-100 dark:bg-studio-800 text-gray-600 dark:text-studio-300 hover:bg-gray-200/70 dark:hover:bg-studio-750'
+          }`}
+        >
+          <Camera className="size-3" />
+          <span>4K Photo</span>
+        </button>
+
+        <button
+          disabled={isRecording}
+          onClick={() => setActiveTab('gltf')}
+          className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all ${
+            activeTab === 'gltf'
+              ? 'bg-brand-500 text-white shadow-sm shadow-brand-500/25'
+              : 'bg-gray-100 dark:bg-studio-800 text-gray-600 dark:text-studio-300 hover:bg-gray-200/70 dark:hover:bg-studio-750'
+          }`}
+        >
+          <Box className="size-3" />
+          <span>3D Model</span>
+        </button>
+
+        <button
+          disabled={isRecording}
+          onClick={() => setActiveTab('techpack')}
+          className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all ${
+            activeTab === 'techpack'
+              ? 'bg-brand-500 text-white shadow-sm shadow-brand-500/25'
+              : 'bg-gray-100 dark:bg-studio-800 text-gray-600 dark:text-studio-300 hover:bg-gray-200/70 dark:hover:bg-studio-750'
+          }`}
+        >
+          <FileText className="size-3" />
+          <span>Tech Pack</span>
+        </button>
+      </div>
+
+      {/* Main Body Content with scroll */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-3.5 space-y-3.5 text-gray-900 dark:text-studio-100">
+        {/* ========================================================================= */}
+        {/* TAB 1: VIDEO RECORDING */}
+        {/* ========================================================================= */}
+        {activeTab === 'video' && (
+          <div className="space-y-3.5">
+            {/* Format Selection */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[11px] font-bold text-gray-700 dark:text-studio-200 flex items-center gap-1">
+                  <Film className="size-3 text-brand-500" />
+                  <span>Video Format</span>
+                </label>
+                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {videoFps} FPS Video
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                {/* Mobile (9:16) */}
+                <button
+                  disabled={isRecording}
+                  onClick={() => setVideoFormat('mobile')}
+                  className={`p-2 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                    videoFormat === 'mobile'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className={`p-1 rounded-md ${videoFormat === 'mobile' ? 'bg-brand-500 text-white' : 'bg-gray-200 dark:bg-studio-800 text-gray-600 dark:text-studio-400'}`}>
+                      <Smartphone className="size-3" />
+                    </div>
+                    <span className="text-[9px] font-bold text-brand-600 dark:text-brand-400">9:16</span>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-extrabold text-gray-900 dark:text-white">Mobile</div>
+                    <div className="text-[9px] text-gray-500 dark:text-studio-400">1080×1920</div>
+                  </div>
+                </button>
+
+                {/* Desktop (16:9) */}
+                <button
+                  disabled={isRecording}
+                  onClick={() => setVideoFormat('desktop')}
+                  className={`p-2 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                    videoFormat === 'desktop'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className={`p-1 rounded-md ${videoFormat === 'desktop' ? 'bg-brand-500 text-white' : 'bg-gray-200 dark:bg-studio-800 text-gray-600 dark:text-studio-400'}`}>
+                      <Monitor className="size-3" />
+                    </div>
+                    <span className="text-[9px] font-bold text-brand-600 dark:text-brand-400">16:9</span>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-extrabold text-gray-900 dark:text-white">Desktop</div>
+                    <div className="text-[9px] text-gray-500 dark:text-studio-400">1920×1080</div>
+                  </div>
+                </button>
+
+                {/* Square (1:1) */}
+                <button
+                  disabled={isRecording}
+                  onClick={() => setVideoFormat('square')}
+                  className={`p-2 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                    videoFormat === 'square'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className={`p-1 rounded-md ${videoFormat === 'square' ? 'bg-brand-500 text-white' : 'bg-gray-200 dark:bg-studio-800 text-gray-600 dark:text-studio-400'}`}>
+                      <Square className="size-3" />
+                    </div>
+                    <span className="text-[9px] font-bold text-brand-600 dark:text-brand-400">1:1</span>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-extrabold text-gray-900 dark:text-white">Square</div>
+                    <div className="text-[9px] text-gray-500 dark:text-studio-400">1080×1080</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Frame Rate (FPS) Selection */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[11px] font-bold text-gray-700 dark:text-studio-200 flex items-center gap-1">
+                  <Gauge className="size-3 text-brand-500" />
+                  <span>Frame Rate (FPS)</span>
+                </label>
+                <span className="text-[10px] text-gray-500 dark:text-studio-400 font-semibold">
+                  {videoFps === 24 ? 'Cinematic (Default)' : videoFps === 30 ? 'Smooth Standard' : 'Ultra Smooth'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { value: 30, label: '30 FPS', desc: 'Smooth Standard' },
+                  { value: 60, label: '60 FPS', desc: 'Ultra Smooth 60fps' },
+                  { value: 24, label: '24 FPS', desc: 'Cinematic' }
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    disabled={isRecording}
+                    onClick={() => setVideoFps(item.value)}
+                    className={`py-2 px-2 rounded-xl border text-center transition-all ${
+                      videoFps === item.value
+                        ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm text-brand-600 dark:text-brand-400 font-extrabold'
+                        : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-700 dark:text-studio-300 font-medium'
+                    }`}
+                  >
+                    <div className="text-xs font-black">{item.label}</div>
+                    <div className="text-[9px] opacity-75">{item.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Showcase Motion Mode */}
+            <div>
+              <label className="text-xs font-bold text-gray-700 dark:text-studio-200 mb-2 flex items-center gap-1.5">
+                <RotateCw className="size-3.5 text-brand-500" />
+                <span>Showcase Motion</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={isRecording}
+                  onClick={() => setVideoMotion('current')}
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    videoMotion === 'current'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <Film className="size-3.5 text-brand-500" />
+                    <span className="text-xs font-extrabold text-gray-900 dark:text-white">Active Screen View</span>
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-studio-400">
+                    Preserves current zoom, angle, animation & background
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isRecording}
+                  onClick={() => setVideoMotion('showcase360')}
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    videoMotion === 'showcase360'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <RotateCw className="size-3.5 text-indigo-500" />
+                    <span className="text-xs font-extrabold text-gray-900 dark:text-white">360° Turntable</span>
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-studio-400">
+                    Smooth 360° spin loop revealing all angles
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Video File Container Format */}
+            <div>
+              <label className="text-xs font-bold text-gray-700 dark:text-studio-200 mb-2 flex items-center gap-1.5">
+                <Video className="size-3.5 text-brand-500" />
+                <span>Video File Format</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={isRecording}
+                  onClick={() => setPreferredFormat('webm')}
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    preferredFormat === 'webm'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="text-xs font-extrabold text-gray-900 dark:text-white flex items-center justify-between">
+                    <span>WebM Video</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 font-bold">Recommended</span>
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-studio-400 mt-0.5">
+                    Hardware GPU capture, fast browser encoding
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isRecording}
+                  onClick={() => setPreferredFormat('mp4')}
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    preferredFormat === 'mp4'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="text-xs font-extrabold text-gray-900 dark:text-white flex items-center justify-between">
+                    <span>MP4 Video</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-studio-800 text-gray-600 dark:text-studio-400 font-bold">Standard</span>
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-studio-400 mt-0.5">
+                    Universal format for mobile sharing & socials
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Configurable Video Recording Duration (Bar + Counter + Chips) */}
+            <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-studio-850/70 border border-gray-200 dark:border-studio-750 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-700 dark:text-studio-200 flex items-center gap-1.5">
+                  <Clock className="size-3.5 text-brand-500" />
+                  <span>Recording Duration</span>
+                </label>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-black text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-500/20 px-2 py-0.5 rounded-full border border-brand-200 dark:border-brand-500/30">
+                    {videoDuration} seconds
+                  </span>
+                </div>
+              </div>
+
+              {/* Duration Slider Bar */}
+              <div className="space-y-1.5">
+                <div className="relative flex items-center">
+                  <input
+                    type="range"
+                    min="1"
+                    max="30"
+                    step="1"
+                    value={videoDuration}
+                    disabled={isRecording}
+                    onChange={(e) => handleDurationChange(e.target.value)}
+                    className="w-full h-2 bg-gray-200 dark:bg-studio-700 rounded-lg appearance-none cursor-pointer accent-brand-500 disabled:opacity-50"
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-400 dark:text-studio-400 font-medium">
+                  <span>1s (Short)</span>
+                  <span>15s (Standard)</span>
+                  <span>30s (Max)</span>
+                </div>
+              </div>
+
+              {/* Counter / Stepper Controls */}
+              <div className="flex items-center justify-between pt-1 border-t border-gray-200/60 dark:border-studio-750">
+                <span className="text-[11px] font-semibold text-gray-500 dark:text-studio-400">
+                  Exact Duration:
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={isRecording || videoDuration <= 1}
+                    onClick={() => handleDurationChange(videoDuration - 1)}
+                    className="p-1 rounded-lg bg-white dark:bg-studio-800 border border-gray-300 dark:border-studio-700 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-studio-700 disabled:opacity-40 transition-colors"
+                    title="Decrease duration by 1 second"
+                  >
+                    <Minus className="size-3" />
+                  </button>
+
+                  <div className="flex items-center bg-white dark:bg-studio-800 border border-gray-300 dark:border-studio-700 rounded-lg px-2 py-0.5 shadow-2xs">
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      disabled={isRecording}
+                      value={videoDuration}
+                      onChange={(e) => handleDurationChange(e.target.value)}
+                      className="w-8 text-center text-xs font-black text-gray-900 dark:text-white bg-transparent focus:outline-none"
+                    />
+                    <span className="text-[10px] text-gray-400 dark:text-studio-400 font-bold ml-0.5">s</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isRecording || videoDuration >= 30}
+                    onClick={() => handleDurationChange(videoDuration + 1)}
+                    className="p-1 rounded-lg bg-white dark:bg-studio-800 border border-gray-300 dark:border-studio-700 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-studio-700 disabled:opacity-40 transition-colors"
+                    title="Increase duration by 1 second"
+                  >
+                    <Plus className="size-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Preset Pills */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-gray-400 dark:text-studio-500 uppercase tracking-wider font-bold shrink-0">Presets:</span>
+                {[3, 5, 10, 15, 30].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    disabled={isRecording}
+                    onClick={() => setVideoDuration(sec)}
+                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                      videoDuration === sec
+                        ? 'bg-brand-500 text-white shadow-2xs'
+                        : 'bg-white dark:bg-studio-800 border border-gray-200 dark:border-studio-700 text-gray-600 dark:text-studio-300 hover:bg-gray-100 dark:hover:bg-studio-700'
+                    }`}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Recording Progress Status Box */}
+            {isRecording && (
+              <div className="p-4 rounded-2xl bg-brand-50 dark:bg-brand-500/10 border border-brand-200 dark:border-brand-500/30 space-y-2.5 animate-fadeIn">
+                <div className="flex items-center justify-between text-xs font-bold text-brand-700 dark:text-brand-300">
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Recording {videoFps} FPS Video ({recordingProgress}%)
+                  </span>
+                  <span>{elapsedSeconds.toFixed(1)}s / {videoDuration}s</span>
+                </div>
+
+                <div className="w-full h-2 rounded-full bg-brand-200 dark:bg-brand-900/50 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 transition-all duration-150"
+                    style={{ width: `${recordingProgress}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-brand-600 dark:text-brand-400">
+                    Direct hardware GPU capture active...
+                  </span>
+                  <button
+                    onClick={handleStopEarly}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/30 flex items-center gap-1 transition-colors"
+                  >
+                    <StopCircle className="size-3" />
+                    <span>Stop Early</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Success Banner */}
+            {recordedSuccess && lastRecordedFile && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-3 animate-fadeIn">
+                <div className="size-8 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <CheckCircle className="size-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Video Downloaded</div>
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 truncate">{lastRecordedFile}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Start / Stop Recording Action Button */}
+            <button
+              disabled={isRecording || !hasAcceptedAup}
+              onClick={handleStartRecording}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-brand-500 via-indigo-600 to-purple-600 hover:from-brand-600 hover:to-purple-700 text-white font-extrabold text-sm shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              {isRecording ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Recording {videoDuration}s Video...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="size-4" />
+                  <span>Start {videoFps} FPS Video Recording ({videoDuration}s)</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 2: 4K HIGH-RES IMAGE SNAPSHOT */}
+        {/* ========================================================================= */}
+        {activeTab === 'image' && (
+          <div className="space-y-4">
+            {/* Resolution Selector */}
+            <div>
+              <label className="text-xs font-bold text-gray-700 dark:text-studio-200 mb-2 block">
+                Output Resolution
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: '4k', name: '4K Ultra HD', desc: '3840×2160 • Max Detail' },
+                  { id: '1080p', name: '1080p Full HD', desc: '1920×1080 • Standard' },
+                  { id: 'mobile', name: 'Mobile Vertical', desc: '1080×1920 • Story' },
+                  { id: '2k_square', name: '2K Square', desc: '2048×2048 • Catalog' }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setImageRes(item.id)}
+                    className={`p-2.5 rounded-2xl border text-left transition-all ${
+                      imageRes === item.id
+                        ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                        : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                    }`}
+                  >
+                    <div className="text-xs font-extrabold text-gray-900 dark:text-white">{item.name}</div>
+                    <div className="text-[10px] text-gray-500 dark:text-studio-400 mt-0.5">{item.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Format Selector: PNG (Transparent) vs JPG */}
+            <div>
+              <label className="text-xs font-bold text-gray-700 dark:text-studio-200 mb-2 block">
+                File Format & Background
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setImageFormat('png')}
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    imageFormat === 'png'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="text-xs font-extrabold text-gray-900 dark:text-white">PNG (Transparent)</div>
+                  <div className="text-[10px] text-gray-500 dark:text-studio-400 mt-0.5">Clear background for product mockups</div>
+                </button>
+
+                <button
+                  onClick={() => setImageFormat('jpg')}
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    imageFormat === 'jpg'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/15 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-gray-200 dark:border-studio-800 bg-gray-50/70 dark:bg-studio-850/60 hover:bg-gray-100 dark:hover:bg-studio-800 text-gray-600 dark:text-studio-400'
+                  }`}
+                >
+                  <div className="text-xs font-extrabold text-gray-900 dark:text-white">JPG (Backdrop)</div>
+                  <div className="text-[10px] text-gray-500 dark:text-studio-400 mt-0.5">Includes current studio lighting</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Download Snapshot Button */}
+            <button
+              onClick={handleDownloadSnapshot}
+              disabled={!hasAcceptedAup}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-brand-500 via-indigo-600 to-purple-600 hover:from-brand-600 hover:to-purple-700 text-white font-extrabold text-sm shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              <Download className="size-4" />
+              <span>Download {imageRes.toUpperCase()} Snapshot ({imageFormat.toUpperCase()})</span>
+            </button>
+
+            {/* Dual Front & Back Export */}
+            <button
+              onClick={handleDownloadDualViews}
+              disabled={!hasAcceptedAup || isExportingDual}
+              className="w-full py-2.5 px-4 rounded-2xl bg-gray-100 dark:bg-studio-800 hover:bg-gray-200 dark:hover:bg-studio-700 text-gray-900 dark:text-white font-bold text-xs border border-gray-200 dark:border-studio-700 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              {isExportingDual ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin text-brand-500" />
+                  <span>Capturing Front & Back Views...</span>
+                </>
+              ) : (
+                <>
+                  <RotateCw className="size-3.5 text-brand-500" />
+                  <span>Download Dual Views (Front & Back PNGs)</span>
+                </>
+              )}
+            </button>
+
+            {/* Print-Ready Isolated Artwork Export Section */}
+            <div className="pt-3 border-t border-gray-100 dark:border-studio-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-700 dark:text-studio-200 flex items-center gap-1.5">
+                  <Palette className="size-3.5 text-brand-500" />
+                  <span>Print-Ready Artwork (DTG/Screen)</span>
+                </label>
+                <span className="text-[10px] font-mono font-bold text-brand-500 bg-brand-50 dark:bg-brand-500/20 px-2 py-0.5 rounded-full border border-brand-200 dark:border-brand-500/30">
+                  Isolated PNG
+                </span>
+              </div>
+              <p className="text-[10px] text-gray-500 dark:text-studio-400">
+                Exports transparent 300-DPI isolated artwork decals without garment background for printing factories.
+              </p>
+              <div className="flex items-center gap-1">
+                {[
+                  { id: 'front', label: 'Front' },
+                  { id: 'back', label: 'Back' },
+                  { id: 'left_sleeve', label: 'L Sleeve' },
+                  { id: 'right_sleeve', label: 'R Sleeve' }
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setPrintArtworkSide(s.id)}
+                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                      printArtworkSide === s.id
+                        ? 'bg-brand-500 text-white shadow-2xs'
+                        : 'bg-gray-100 dark:bg-studio-800 text-gray-600 dark:text-studio-300 hover:bg-gray-200 dark:hover:bg-studio-700'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadPrintReady}
+                className="w-full py-2 px-3 rounded-xl bg-black dark:bg-studio-800 hover:bg-gray-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              >
+                <Download className="size-3.5" />
+                <span>Download {printArtworkSide.toUpperCase().replace('_', ' ')} Artwork</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 3: 3D MODEL (.GLTF) EXPORT */}
+        {/* ========================================================================= */}
+        {activeTab === 'gltf' && (
+          <div className="space-y-4">
+            <div className="p-3 bg-brand-50/60 dark:bg-brand-500/10 rounded-2xl border border-brand-200 dark:border-brand-500/20">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Box className="size-4 text-brand-500" />
+                <h4 className="text-xs font-extrabold text-gray-900 dark:text-white">Universal 3D Garment Model</h4>
+              </div>
+              <p className="text-[11px] text-gray-600 dark:text-studio-300 leading-relaxed">
+                Export the customized 3D garment as an industry-standard <span className="font-semibold text-brand-600 dark:text-brand-400">.glTF</span> asset complete with materials, vertex normals, and textures.
+              </p>
+            </div>
+
+            <div className="space-y-2 text-xs text-gray-600 dark:text-studio-400">
+              <div className="flex items-center justify-between p-2 rounded-xl bg-gray-50 dark:bg-studio-800 border border-gray-150 dark:border-studio-700">
+                <span className="font-semibold">Format</span>
+                <span className="font-mono text-gray-900 dark:text-white font-bold">glTF 2.0 (.gltf JSON)</span>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded-xl bg-gray-50 dark:bg-studio-800 border border-gray-150 dark:border-studio-700">
+                <span className="font-semibold">Compatibility</span>
+                <span className="text-gray-900 dark:text-white font-medium">Blender, Unity, Unreal, WebGL</span>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded-xl bg-gray-50 dark:bg-studio-800 border border-gray-150 dark:border-studio-700">
+                <span className="font-semibold">Textures & Materials</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">Embedded PBR</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleExportGLTF}
+              disabled={isExportingGLTF || !hasAcceptedAup}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-brand-500 via-indigo-600 to-purple-600 hover:from-brand-600 hover:to-purple-700 text-white font-extrabold text-sm shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98] mt-2 disabled:opacity-50"
+            >
+              {isExportingGLTF ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Packaging 3D Model...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="size-4" />
+                  <span>Download .glTF 3D Model</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4: PRODUCTION TECH PACK & SPEC SHEET */}
+        {/* ========================================================================= */}
+        {activeTab === 'techpack' && (
+          <div className="space-y-3.5">
+            <div className="p-3 bg-gray-50/80 dark:bg-studio-850/80 rounded-2xl border border-gray-200/80 dark:border-studio-750 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-500 border border-indigo-500/25">
+                  <FileText className="size-3.5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-gray-900 dark:text-white leading-tight">
+                    Production Tech Pack &amp; Spec Sheet
+                  </h4>
+                  <p className="text-[10px] text-gray-500 dark:text-studio-400">
+                    Comprehensive factory-ready blueprint with dual 3D views and decal matrix.
+                  </p>
+                </div>
+              </div>
+
+              {/* Design Summary Card */}
+              <div className="p-2.5 rounded-xl bg-white dark:bg-studio-900 border border-gray-200/80 dark:border-studio-700/80 space-y-1.5 text-[11px]">
+                <div className="flex justify-between items-center text-gray-700 dark:text-studio-300">
+                  <span className="font-semibold">Style:</span>
+                  <span className="font-bold text-gray-900 dark:text-white">
+                    {(GARMENT_PRODUCTS.find(p => p.id === sceneManager?.garmentType)?.title || 'Blank')
+                      .replace(' STUDIO', '')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-gray-700 dark:text-studio-300">
+                  <span className="font-semibold">Base Dye:</span>
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="size-3.5 rounded-full border border-gray-300 dark:border-studio-600"
+                      style={{ backgroundColor: sceneManager?.garmentColor || '#ffffff' }}
+                    />
+                    <span className="font-mono text-[10px] font-bold">
+                      {(sceneManager?.garmentColor || '#ffffff').toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-gray-700 dark:text-studio-300">
+                  <span className="font-semibold">Decal Layers:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    {sceneManager?.designManager?.layers?.length || 0} Layers Applied
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action 1: Download Tech Pack Sheet */}
+            <button
+              onClick={handleDownloadTechPack}
+              disabled={isGeneratingTechPack || !hasAcceptedAup}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-brand-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              {isGeneratingTechPack ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Generating Spec Sheet (300 DPI)...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="size-4" />
+                  <span>Download Tech Pack Sheet (PNG)</span>
+                </>
+              )}
+            </button>
+
+            {/* Action 2: Shareable 3D Design Link */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleCopyShareLink}
+                className={`w-full py-2.5 px-4 rounded-2xl border font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+                  shareLinkCopied
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-gray-100 dark:bg-studio-800 border-gray-200/90 dark:border-studio-700 text-gray-800 dark:text-white hover:bg-gray-200/70 dark:hover:bg-studio-750'
+                }`}
+              >
+                {shareLinkCopied ? (
+                  <>
+                    <Check className="size-3.5 text-emerald-500" />
+                    <span>Shareable 3D Link Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="size-3.5 text-brand-500" />
+                    <span>Copy Shareable 3D Link</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Intellectual Property & Acceptable Use Policy (AUP) Compliance */}
+        <div className="mt-4 p-3 bg-gray-50/80 dark:bg-studio-850/80 rounded-2xl border border-gray-200/80 dark:border-studio-750 text-left space-y-2">
+          <label className="flex items-start gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hasAcceptedAup}
+              onChange={(e) => setHasAcceptedAup(e.target.checked)}
+              className="mt-0.5 rounded border-gray-300 dark:border-studio-600 text-brand-600 focus:ring-brand-500 shrink-0"
+            />
+            <span className="text-[11px] font-medium text-gray-700 dark:text-studio-300 leading-tight">
+              I confirm that I own or hold the commercial license for all uploaded graphics, emblems, and typography.
+            </span>
+          </label>
+          <p className="text-[10px] text-gray-400 dark:text-studio-500 leading-normal pl-6 border-t border-gray-150 dark:border-studio-800 pt-1.5 font-sans">
+            Legal notice: Mockup rendered for preview purposes only. All uploaded trademarks belong to their respective owners.
+          </p>
+        </div>
+      </div>
+
+      {/* Footer Status Indicator */}
+      <div className="px-5 py-2.5 bg-gray-50 dark:bg-studio-850 border-t border-gray-100 dark:border-studio-800 flex items-center justify-between text-[11px] text-gray-500 dark:text-studio-400 shrink-0">
+        <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+          <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Ready for Studio Export</span>
+        </span>
+        <span className="font-mono text-[10px] text-gray-400 dark:text-studio-500">VirtualThreads Studio</span>
+      </div>
+    </aside>
+  );
+}
