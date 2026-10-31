@@ -129,317 +129,7 @@ export default function OversizedApp() {
       });
     }
 
-    const renderControls = (isMobile = false) => (
-    <>
-      {/* Studio Navigation Tabs */}
-      <div className="grid grid-cols-4 p-2 border-b border-gray-200 dark:border-gray-800 text-xs font-bold text-center shrink-0">
-        {[
-          { id: 'design', label: 'Design' },
-          { id: 'color', label: 'Color' },
-          { id: 'motion', label: 'Motion' },
-          { id: 'export', label: 'Export' }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`py-2 rounded-lg transition ${
-              activeTab === tab.id
-                ? 'bg-brand-500 text-white shadow-xs'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Drawer Scrollable Content */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-6 ${isMobile ? 'pb-10' : ''}`}>
-{/* TAB 1: DESIGN & GRAPHICS STUDIO */}
-            {activeTab === 'design' && (
-              <div className="space-y-5">
-                <div className="p-3.5 rounded-xl bg-gray-100 dark:bg-gray-850 border border-gray-200 dark:border-gray-750">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Selected Blank</span>
-                  <div className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
-                    OVERSIZED T-SHIRT (HEAVYWEIGHT)
-                  </div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                    Streetwear drop-shoulder cut, wider boxy torso, relaxed elongated sleeves.
-                  </p>
-                </div>
-
-                {/* Primary Upload CTAs */}
-                <div className="space-y-2">
-                  <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Add Artwork & Decals
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => triggerUpload('front')}
-                      className="p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 hover:border-brand-500 bg-gray-50/50 dark:bg-gray-850/50 flex flex-col items-center justify-center gap-1.5 transition text-center group"
-                    >
-                      <UploadCloud className="w-5 h-5 text-gray-400 group-hover:text-brand-500 transition" />
-                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Front Graphic</span>
-                      <span className="text-[10px] text-gray-400">PNG / JPG / WebP</span>
-                    </button>
-
-                    <button
-                      onClick={() => triggerUpload('back')}
-                      className="p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 hover:border-brand-500 bg-gray-50/50 dark:bg-gray-850/50 flex flex-col items-center justify-center gap-1.5 transition text-center group"
-                    >
-                      <UploadCloud className="w-5 h-5 text-gray-400 group-hover:text-brand-500 transition" />
-                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Back Graphic</span>
-                      <span className="text-[10px] text-gray-400">PNG / JPG / WebP</span>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button
-                      onClick={() => handleAddQuickText('front')}
-                      className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-750 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-300 transition"
-                    >
-                      <Type className="w-4 h-4 text-brand-500" />
-                      <span>Add Text (Front)</span>
-                    </button>
-                    <button
-                      onClick={() => handleAddQuickText('back')}
-                      className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-750 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-300 transition"
-                    >
-                      <Type className="w-4 h-4 text-brand-500" />
-                      <span>Add Text (Back)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Open Position Guide Button */}
-                <button
-                  onClick={() => setPositionGuideOpen(true)}
-                  className="w-full py-3 px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-black dark:bg-white text-white dark:text-black flex items-center justify-between shadow-md hover:opacity-90 transition"
-                >
-                  <span className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-brand-500" />
-                    <span>Launch 2048x2048 Position Guide</span>
-                  </span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-
-                {/* Live Layers List */}
-                <div className="space-y-2 pt-2">
-                  <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    <span>Applied Layers ({layers.length})</span>
-                    {layers.length > 0 && (
-                      <span className="text-[10px] font-normal text-gray-400">Double click design to resize</span>
-                    )}
-                  </div>
-
-                  {layers.length === 0 ? (
-                    <div className="p-4 rounded-xl border border-dashed border-gray-200 dark:border-gray-800 text-center text-xs text-gray-400">
-                      No artwork layers placed yet. Upload an image or add text above.
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {layers.map((l, idx) => (
-                        <div
-                          key={l.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 text-xs"
-                        >
-                          <div className="flex items-center gap-2.5 truncate">
-                            <span className="text-[10px] font-mono font-bold text-gray-400">#{idx + 1}</span>
-                            <span className="font-bold truncate text-gray-900 dark:text-gray-100">
-                              {l.type === 'text' ? `Text: "${l.text}"` : (l.type === 'shape' ? `Shape: ${l.shapeType}` : 'Image Decal')}
-                            </span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-gray-200 dark:bg-gray-750 text-gray-600 dark:text-gray-300">
-                              {l.side}
-                            </span>
-                          </div>
-
-                          <button
-                            onClick={() => handleDeleteLayer(l.id)}
-                            className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
-                            title="Delete Layer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: FABRIC COLOR & FINISH */}
-            {activeTab === 'color' && (
-              <div className="space-y-5">
-                <div>
-                  <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-2.5">
-                    Garment Fabric Color
-                  </label>
-                  <div className="grid grid-cols-5 gap-2">
-                    {COLOR_SWATCHES.map((swatch) => {
-                      const isSelected = garmentColor.toLowerCase() === swatch.hex.toLowerCase();
-                      return (
-                        <button
-                          key={swatch.name}
-                          onClick={() => handleColorChange(swatch.hex)}
-                          className={`flex flex-col items-center gap-1 p-1.5 rounded-xl border transition ${
-                            isSelected
-                              ? 'border-brand-500 bg-brand-500/10'
-                              : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
-                          }`}
-                          title={swatch.name}
-                        >
-                          <div
-                            className="w-8 h-8 rounded-full border border-black/10 shadow-inner"
-                            style={{ backgroundColor: swatch.hex }}
-                          />
-                          <span className="text-[9px] font-bold truncate max-w-full text-gray-600 dark:text-gray-400">
-                            {swatch.name.split(' ')[0]}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Custom Hex Color Picker */}
-                <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Custom Color</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={garmentColor}
-                      onChange={(e) => handleColorChange(e.target.value)}
-                      className="w-8 h-8 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
-                    />
-                    <input
-                      type="text"
-                      value={garmentColor.toUpperCase()}
-                      onChange={(e) => handleColorChange(e.target.value)}
-                      className="w-20 px-2 py-1 rounded-md text-xs font-mono font-bold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center uppercase"
-                    />
-                  </div>
-                </div>
-
-                {/* Fabric Tactile Finish */}
-                <div>
-                  <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-2.5">
-                    Fabric Texture & Finish
-                  </label>
-                  <div className="space-y-2">
-                    {[
-                      { id: 'combed_cotton', name: 'Combed Cotton Jersey', desc: 'Smooth matte 240 GSM organic cotton' },
-                      { id: 'heavy_terry', name: 'Heavy French Terry', desc: 'Tactile dense looped yarn texture' },
-                      { id: 'mineral_wash', name: 'Mineral Sunfade Wash', desc: 'Authentic vintage distressed fade' }
-                    ].map((f) => (
-                      <button
-                        key={f.id}
-                        onClick={() => handleFinishChange(f.id)}
-                        className={`w-full p-3 rounded-xl text-left border transition flex items-center justify-between ${
-                          fabricFinish === f.id
-                            ? 'border-brand-500 bg-brand-500/10 text-gray-900 dark:text-white'
-                            : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-850 text-gray-700 dark:text-gray-300'
-                        }`}
-                      >
-                        <div>
-                          <div className="text-xs font-bold">{f.name}</div>
-                          <div className="text-[10px] text-gray-400">{f.desc}</div>
-                        </div>
-                        {fabricFinish === f.id && <CheckCircle className="w-4 h-4 text-brand-500 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 3: MOTION & CAMERA ANIMATION */}
-            {activeTab === 'motion' && (
-              <div className="space-y-4">
-                <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block">
-                  3D Animation Modes
-                </label>
-                {[
-                  { id: 'rotate_walk', name: 'Rotate & Runway Walk', desc: 'Simultaneous 360° continuous turntable spin during catwalk runway walk' },
-                  { id: 'turntable', name: '360° Turntable Rotation', desc: 'Smooth continuous spin of the oversized blank' },
-                  { id: 'walking', name: 'Runway Walk Stride', desc: 'Streetwear catwalk stride animation' },
-                  { id: 'waves', name: 'Fabric Wind Waves', desc: 'Realistic micro-cloth wave dynamics' },
-                  { id: 'none', name: 'Static Studio View', desc: 'Fixed resting position for precision design' }
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => handleAnimationToggle(m.id)}
-                    className={`w-full p-3.5 rounded-xl text-left border transition flex items-center justify-between ${
-                      animationMode === m.id
-                        ? 'border-brand-500 bg-brand-500/10 text-gray-900 dark:text-white'
-                        : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-850 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="text-xs font-bold">{m.name}</div>
-                      <div className="text-[10px] text-gray-400">{m.desc}</div>
-                    </div>
-                    {animationMode === m.id && <CheckCircle className="w-4 h-4 text-brand-500 shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* TAB 4: HIGH-RES EXPORT STUDIO */}
-            {activeTab === 'export' && (
-              <div className="space-y-4">
-                <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block">
-                  Mockup Output Presets
-                </label>
-
-                <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-500 font-bold">
-                      PNG
-                    </div>
-                    <div>
-                      <div className="text-xs font-extrabold text-gray-900 dark:text-white">4K Snapshot Mockup</div>
-                      <div className="text-[10px] text-gray-400">Transparent or solid background with sharp decals</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setExportType('image');
-                      setExportOpen(true);
-                    }}
-                    className="w-full py-2.5 rounded-lg text-xs font-bold bg-brand-500 hover:bg-brand-600 text-white transition shadow-sm"
-                  >
-                    Open Image Export Panel
-                  </button>
-                </div>
-
-                <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center text-purple-500 font-bold">
-                      MP4
-                    </div>
-                    <div>
-                      <div className="text-xs font-extrabold text-gray-900 dark:text-white">60fps Smooth Video Mockup</div>
-                      <div className="text-[10px] text-gray-400">Turntable rotation clip ready for Instagram & TikTok</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setExportType('video');
-                      setExportOpen(true);
-                    }}
-                    className="w-full py-2.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition shadow-sm"
-                  >
-                    Open Video Export Panel
-                  </button>
-                </div>
-              </div>
-            )}
-      </div>
-    </>
-  );
-
-  return () => {
+    return () => {
       sm.dispose();
       sceneManagerRef.current = null;
       if (typeof window !== 'undefined') {
@@ -593,6 +283,316 @@ export default function OversizedApp() {
       prompt('Copy this link to share:', url.toString());
     }
   };
+
+  const renderControls = (isMobile = false) => (
+  <>
+    {/* Studio Navigation Tabs */}
+    <div className="grid grid-cols-4 p-2 border-b border-gray-200 dark:border-gray-800 text-xs font-bold text-center shrink-0">
+      {[
+        { id: 'design', label: 'Design' },
+        { id: 'color', label: 'Color' },
+        { id: 'motion', label: 'Motion' },
+        { id: 'export', label: 'Export' }
+      ].map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => setActiveTab(tab.id)}
+          className={`py-2 rounded-lg transition ${
+            activeTab === tab.id
+              ? 'bg-brand-500 text-white shadow-xs'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+
+    {/* Drawer Scrollable Content */}
+    <div className={`flex-1 overflow-y-auto p-4 space-y-6 ${isMobile ? 'pb-10' : ''}`}>
+{/* TAB 1: DESIGN & GRAPHICS STUDIO */}
+          {activeTab === 'design' && (
+            <div className="space-y-5">
+              <div className="p-3.5 rounded-xl bg-gray-100 dark:bg-gray-850 border border-gray-200 dark:border-gray-750">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Selected Blank</span>
+                <div className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
+                  OVERSIZED T-SHIRT (HEAVYWEIGHT)
+                </div>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                  Streetwear drop-shoulder cut, wider boxy torso, relaxed elongated sleeves.
+                </p>
+              </div>
+
+              {/* Primary Upload CTAs */}
+              <div className="space-y-2">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Add Artwork & Decals
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => triggerUpload('front')}
+                    className="p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 hover:border-brand-500 bg-gray-50/50 dark:bg-gray-850/50 flex flex-col items-center justify-center gap-1.5 transition text-center group"
+                  >
+                    <UploadCloud className="w-5 h-5 text-gray-400 group-hover:text-brand-500 transition" />
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Front Graphic</span>
+                    <span className="text-[10px] text-gray-400">PNG / JPG / WebP</span>
+                  </button>
+
+                  <button
+                    onClick={() => triggerUpload('back')}
+                    className="p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 hover:border-brand-500 bg-gray-50/50 dark:bg-gray-850/50 flex flex-col items-center justify-center gap-1.5 transition text-center group"
+                  >
+                    <UploadCloud className="w-5 h-5 text-gray-400 group-hover:text-brand-500 transition" />
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Back Graphic</span>
+                    <span className="text-[10px] text-gray-400">PNG / JPG / WebP</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => handleAddQuickText('front')}
+                    className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-750 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-300 transition"
+                  >
+                    <Type className="w-4 h-4 text-brand-500" />
+                    <span>Add Text (Front)</span>
+                  </button>
+                  <button
+                    onClick={() => handleAddQuickText('back')}
+                    className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-750 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-300 transition"
+                  >
+                    <Type className="w-4 h-4 text-brand-500" />
+                    <span>Add Text (Back)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Open Position Guide Button */}
+              <button
+                onClick={() => setPositionGuideOpen(true)}
+                className="w-full py-3 px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-black dark:bg-white text-white dark:text-black flex items-center justify-between shadow-md hover:opacity-90 transition"
+              >
+                <span className="flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-brand-500" />
+                  <span>Launch 2048x2048 Position Guide</span>
+                </span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              {/* Live Layers List */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  <span>Applied Layers ({layers.length})</span>
+                  {layers.length > 0 && (
+                    <span className="text-[10px] font-normal text-gray-400">Double click design to resize</span>
+                  )}
+                </div>
+
+                {layers.length === 0 ? (
+                  <div className="p-4 rounded-xl border border-dashed border-gray-200 dark:border-gray-800 text-center text-xs text-gray-400">
+                    No artwork layers placed yet. Upload an image or add text above.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {layers.map((l, idx) => (
+                      <div
+                        key={l.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 text-xs"
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <span className="text-[10px] font-mono font-bold text-gray-400">#{idx + 1}</span>
+                          <span className="font-bold truncate text-gray-900 dark:text-gray-100">
+                            {l.type === 'text' ? `Text: "${l.text}"` : (l.type === 'shape' ? `Shape: ${l.shapeType}` : 'Image Decal')}
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-gray-200 dark:bg-gray-750 text-gray-600 dark:text-gray-300">
+                            {l.side}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleDeleteLayer(l.id)}
+                          className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                          title="Delete Layer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: FABRIC COLOR & FINISH */}
+          {activeTab === 'color' && (
+            <div className="space-y-5">
+              <div>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-2.5">
+                  Garment Fabric Color
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {COLOR_SWATCHES.map((swatch) => {
+                    const isSelected = garmentColor.toLowerCase() === swatch.hex.toLowerCase();
+                    return (
+                      <button
+                        key={swatch.name}
+                        onClick={() => handleColorChange(swatch.hex)}
+                        className={`flex flex-col items-center gap-1 p-1.5 rounded-xl border transition ${
+                          isSelected
+                            ? 'border-brand-500 bg-brand-500/10'
+                            : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
+                        }`}
+                        title={swatch.name}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-full border border-black/10 shadow-inner"
+                          style={{ backgroundColor: swatch.hex }}
+                        />
+                        <span className="text-[9px] font-bold truncate max-w-full text-gray-600 dark:text-gray-400">
+                          {swatch.name.split(' ')[0]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Hex Color Picker */}
+              <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Custom Color</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={garmentColor}
+                    onChange={(e) => handleColorChange(e.target.value)}
+                    className="w-8 h-8 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                  />
+                  <input
+                    type="text"
+                    value={garmentColor.toUpperCase()}
+                    onChange={(e) => handleColorChange(e.target.value)}
+                    className="w-20 px-2 py-1 rounded-md text-xs font-mono font-bold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center uppercase"
+                  />
+                </div>
+              </div>
+
+              {/* Fabric Tactile Finish */}
+              <div>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-2.5">
+                  Fabric Texture & Finish
+                </label>
+                <div className="space-y-2">
+                  {[
+                    { id: 'combed_cotton', name: 'Combed Cotton Jersey', desc: 'Smooth matte 240 GSM organic cotton' },
+                    { id: 'heavy_terry', name: 'Heavy French Terry', desc: 'Tactile dense looped yarn texture' },
+                    { id: 'mineral_wash', name: 'Mineral Sunfade Wash', desc: 'Authentic vintage distressed fade' }
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => handleFinishChange(f.id)}
+                      className={`w-full p-3 rounded-xl text-left border transition flex items-center justify-between ${
+                        fabricFinish === f.id
+                          ? 'border-brand-500 bg-brand-500/10 text-gray-900 dark:text-white'
+                          : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-850 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="text-xs font-bold">{f.name}</div>
+                        <div className="text-[10px] text-gray-400">{f.desc}</div>
+                      </div>
+                      {fabricFinish === f.id && <CheckCircle className="w-4 h-4 text-brand-500 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: MOTION & CAMERA ANIMATION */}
+          {activeTab === 'motion' && (
+            <div className="space-y-4">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block">
+                3D Animation Modes
+              </label>
+              {[
+                { id: 'rotate_walk', name: 'Rotate & Runway Walk', desc: 'Simultaneous 360° continuous turntable spin during catwalk runway walk' },
+                { id: 'turntable', name: '360° Turntable Rotation', desc: 'Smooth continuous spin of the oversized blank' },
+                { id: 'walking', name: 'Runway Walk Stride', desc: 'Streetwear catwalk stride animation' },
+                { id: 'waves', name: 'Fabric Wind Waves', desc: 'Realistic micro-cloth wave dynamics' },
+                { id: 'none', name: 'Static Studio View', desc: 'Fixed resting position for precision design' }
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => handleAnimationToggle(m.id)}
+                  className={`w-full p-3.5 rounded-xl text-left border transition flex items-center justify-between ${
+                    animationMode === m.id
+                      ? 'border-brand-500 bg-brand-500/10 text-gray-900 dark:text-white'
+                      : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-850 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <div>
+                    <div className="text-xs font-bold">{m.name}</div>
+                    <div className="text-[10px] text-gray-400">{m.desc}</div>
+                  </div>
+                  {animationMode === m.id && <CheckCircle className="w-4 h-4 text-brand-500 shrink-0" />}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* TAB 4: HIGH-RES EXPORT STUDIO */}
+          {activeTab === 'export' && (
+            <div className="space-y-4">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block">
+                Mockup Output Presets
+              </label>
+
+              <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-500 font-bold">
+                    PNG
+                  </div>
+                  <div>
+                    <div className="text-xs font-extrabold text-gray-900 dark:text-white">4K Snapshot Mockup</div>
+                    <div className="text-[10px] text-gray-400">Transparent or solid background with sharp decals</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setExportType('image');
+                    setExportOpen(true);
+                  }}
+                  className="w-full py-2.5 rounded-lg text-xs font-bold bg-brand-500 hover:bg-brand-600 text-white transition shadow-sm"
+                >
+                  Open Image Export Panel
+                </button>
+              </div>
+
+              <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center text-purple-500 font-bold">
+                    MP4
+                  </div>
+                  <div>
+                    <div className="text-xs font-extrabold text-gray-900 dark:text-white">60fps Smooth Video Mockup</div>
+                    <div className="text-[10px] text-gray-400">Turntable rotation clip ready for Instagram & TikTok</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setExportType('video');
+                    setExportOpen(true);
+                  }}
+                  className="w-full py-2.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition shadow-sm"
+                >
+                  Open Video Export Panel
+                </button>
+              </div>
+            </div>
+          )}
+    </div>
+  </>
+);
 
   return (
     <div className={`w-screen h-screen overflow-hidden flex flex-col font-sans select-none ${
