@@ -63,6 +63,7 @@ export default function OversizedApp() {
   const [positionGuideOpen, setPositionGuideOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportType, setExportType] = useState('image');
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [theme, setTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('vt_theme') || 'dark';
@@ -128,421 +129,33 @@ export default function OversizedApp() {
       });
     }
 
-    return () => {
-      sm.dispose();
-      sceneManagerRef.current = null;
-      if (typeof window !== 'undefined') {
-        window.__SCENE_MANAGER__ = null;
-        window.__IS_LOADED__ = false;
-      }
-    };
-  }, []);
-
-  // Sync garment color
-  const handleColorChange = (hex) => {
-    setGarmentColor(hex);
-    if (sceneManagerRef.current) {
-      sceneManagerRef.current.setGarmentColor(hex);
-    }
-  };
-
-  // Sync fabric finish
-  const handleFinishChange = (finish) => {
-    setFabricFinish(finish);
-    if (sceneManagerRef.current?.designManager) {
-      sceneManagerRef.current.designManager.setFabricFinish(finish);
-      showFeedback(`Fabric finish applied: ${finish.replace('_', ' ').toUpperCase()}`);
-    }
-  };
-
-  // Camera views
-  const handleCameraChange = (cam) => {
-    setCurrentCamera(cam);
-    const side = (cam === 'left' || cam === 'left_sleeve' || cam === 'lsleeve')
-      ? 'left_sleeve'
-      : (cam === 'right' || cam === 'right_sleeve' || cam === 'rsleeve')
-      ? 'right_sleeve'
-      : (cam === 'back' ? 'back' : 'front');
-    setActiveSide(side);
-
-    // If turntable or rotate_walk was active, pause rotation so view remains focused on chosen angle
-    if (animationMode === 'turntable' || animationMode === 'rotate_walk') {
-      setAnimationMode('none');
-      if (sceneManagerRef.current) {
-        sceneManagerRef.current.setAnimationMode('none');
-      }
-    }
-
-    // In 2D mode, if clicking left/right sleeve, auto-switch to 3D mode
-    if (viewMode === '2d' && (cam === 'left' || cam === 'right')) {
-      setViewMode('3d');
-      sceneManagerRef.current?.setViewMode?.('3d');
-    }
-
-    if (sceneManagerRef.current) {
-      if (typeof sceneManagerRef.current.setCameraPreset === 'function') {
-        sceneManagerRef.current.setCameraPreset(cam, isZoomed);
-      } else if (typeof sceneManagerRef.current.setCameraView === 'function') {
-        sceneManagerRef.current.setCameraView(cam, isZoomed);
-      }
-    }
-  };
-
-  // Motion modes
-  const handleAnimationToggle = (mode) => {
-    const next = animationMode === mode ? 'none' : mode;
-    setAnimationMode(next);
-    if (sceneManagerRef.current) {
-      sceneManagerRef.current.setAnimationMode(next);
-    }
-    showFeedback(next === 'none' ? 'Motion paused' : `${mode.replace('_', ' ').toUpperCase()} motion activated`);
-  };
-
-  // Quick file upload
-  const triggerUpload = (side = 'front') => {
-    uploadSideRef.current = side;
-    fileInputRef.current?.click();
-  };
-
-  const onFileInputChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !sceneManagerRef.current?.designManager) return;
-
-    if (file.size > 15 * 1024 * 1024) {
-      showFeedback('File too large (Max 15MB)');
-      e.target.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const side = uploadSideRef.current;
-        const centerX = side === 'back' ? 1528 : (side === 'left_sleeve' ? 480 : (side === 'right_sleeve' ? 1528 : 480));
-        const centerY = (side === 'left_sleeve' || side === 'right_sleeve') ? 1840 : 960;
-
-        sceneManagerRef.current.designManager.addLayer({
-          type: 'image',
-          side: side,
-          image: img,
-          x: centerX,
-          y: centerY,
-          scale: 1.0,
-          rotation: 0,
-          printType: 'screen'
-        });
-
-        handleCameraChange(side);
-        setPositionGuideOpen(true);
-        showFeedback('Artwork uploaded • Position guide opened for exact alignment');
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  const handleAddQuickText = (side = 'front') => {
-    if (!sceneManagerRef.current?.designManager) return;
-    const centerX = side === 'back' ? 1528 : (side === 'left_sleeve' ? 480 : (side === 'right_sleeve' ? 1528 : 480));
-    const centerY = (side === 'left_sleeve' || side === 'right_sleeve') ? 1840 : 960;
-
-    sceneManagerRef.current.designManager.addLayer({
-      type: 'text',
-      side: side,
-      text: 'OVERSIZED TEE',
-      textColor: garmentColor === '#ffffff' ? '#000000' : '#ffffff',
-      fontSize: 14,
-      fontFamily: 'Roboto',
-      x: centerX,
-      y: centerY,
-      scale: 1.0,
-      rotation: 0,
-      printType: 'screen'
-    });
-    handleCameraChange(side);
-    setPositionGuideOpen(true);
-    showFeedback('Text layer added');
-  };
-
-  const handleDeleteLayer = (id) => {
-    if (sceneManagerRef.current?.designManager) {
-      sceneManagerRef.current.designManager.removeLayer(id);
-      showFeedback('Layer deleted');
-    }
-  };
-
-  const handleShareDesign = () => {
-    const url = new URL(window.location.href);
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url.toString());
-      showFeedback('Studio link copied to clipboard!');
-    } else {
-      prompt('Copy this link to share:', url.toString());
-    }
-  };
-
-  return (
-    <div className={`w-screen h-screen overflow-hidden flex flex-col font-sans select-none ${
-      theme === 'dark' ? 'bg-[#0f1115] text-gray-100' : 'bg-[#f4f5f7] text-gray-900'
-    }`}>
-      {/* Hidden File Input for Image Upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-        onChange={onFileInputChange}
-      />
-
-      {/* Top Header Navigation */}
-      <header className={`h-14 sm:h-16 px-4 sm:px-6 flex items-center justify-between border-b shrink-0 z-20 ${
-        theme === 'dark' ? 'bg-[#14171d]/90 border-gray-800 backdrop-blur-md' : 'bg-white/90 border-gray-200 backdrop-blur-md'
-      }`}>
-        {/* Brand & Studio Title */}
-        <div className="flex items-center gap-3 sm:gap-4">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white font-extrabold text-xs sm:text-sm shadow-md shadow-brand-500/20">
-            VT
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase text-gray-900 dark:text-white">
-                VIRTUALTHREADS
-              </h1>
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-brand-500/15 text-brand-500 border border-brand-500/30">
-                Oversized T-Shirt Studio
-              </span>
-            </div>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block">
-              Drop-shoulder streetwear cut • 240+ GSM Heavyweight Cotton • 3D & 2D Flat Mockup
-            </p>
-          </div>
-        </div>
-
-        {/* Header Right Actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* View Mode Toggle (3D vs 2D) */}
-          <div className="flex items-center p-0.5 rounded-lg bg-gray-200/80 dark:bg-gray-800 text-xs font-bold">
-            <button
-              onClick={() => {
-                setViewMode('3d');
-                sceneManagerRef.current?.setViewMode?.('3d');
-              }}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                viewMode === '3d'
-                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              3D Mockup
-            </button>
-            <button
-              onClick={() => {
-                setViewMode('2d');
-                sceneManagerRef.current?.setViewMode?.('2d');
-              }}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                viewMode === '2d'
-                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              2D Flat
-            </button>
-          </div>
-
-          {/* Theme Toggle */}
+    const renderControls = (isMobile = false) => (
+    <>
+      {/* Studio Navigation Tabs */}
+      <div className="grid grid-cols-4 p-2 border-b border-gray-200 dark:border-gray-800 text-xs font-bold text-center shrink-0">
+        {[
+          { id: 'design', label: 'Design' },
+          { id: 'color', label: 'Color' },
+          { id: 'motion', label: 'Motion' },
+          { id: 'export', label: 'Export' }
+        ].map((tab) => (
           <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg bg-gray-200/60 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition"
-            title="Toggle theme"
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
-
-          {/* Share */}
-          <button
-            onClick={handleShareDesign}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-200/60 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700 transition"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-            <span>Share</span>
-          </button>
-
-          {/* Export CTA */}
-          <button
-            onClick={() => {
-              setExportType('image');
-              setExportOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/25 transition active:scale-95"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Mockup</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Studio Body */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Interactive Viewport */}
-        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-          {/* 3D WebGL Canvas Container */}
-          <div
-            ref={containerRef}
-            className={`w-full h-full relative cursor-grab active:cursor-grabbing transition-opacity duration-300 ${
-              viewMode === '3d' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0 absolute inset-0'
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`py-2 rounded-lg transition ${
+              activeTab === tab.id
+                ? 'bg-brand-500 text-white shadow-xs'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
             }`}
-          />
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-          {/* 2D Flat View Overlay */}
-          {viewMode === '2d' && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-              <StaticGarmentView
-                garmentType="oversized_tee"
-                garmentColor={garmentColor}
-                activeSide={activeSide}
-                designManager={sceneManagerRef.current?.designManager}
-              />
-            </div>
-          )}
-
-          {/* Floating Viewport View Angle Bar */}
-          <div className="absolute top-4 left-4 z-20 flex items-center gap-1 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-gray-200/80 dark:border-gray-800">
-            {[
-              { id: 'front', label: 'Front' },
-              { id: 'back', label: 'Back' },
-              { id: 'left', label: 'LSLEEVE' },
-              { id: 'right', label: 'RSLEEVE' }
-            ].map(({ id, label }) => {
-              const isActive = currentCamera === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => handleCameraChange(id)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition ${
-                    isActive
-                      ? 'bg-brand-500 text-white shadow-xs'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Floating Motion Controls (3D only) */}
-          {viewMode === '3d' && (
-            <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md p-1.5 rounded-xl shadow-lg border border-gray-200/80 dark:border-gray-800">
-              <button
-                onClick={() => handleAnimationToggle('turntable')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  animationMode === 'turntable'
-                    ? 'bg-brand-500 text-white'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-                title="360° Continuous Turntable Spin"
-              >
-                <RotateCw className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Turntable</span>
-              </button>
-
-              <button
-                onClick={() => handleAnimationToggle('walking')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  animationMode === 'walking'
-                    ? 'bg-brand-500 text-white'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-                title="Runway Walk Stride Animation"
-              >
-                <Play className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Runway Walk</span>
-              </button>
-
-              <button
-                onClick={() => handleAnimationToggle('rotate_walk')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  animationMode === 'rotate_walk'
-                    ? 'bg-brand-500 text-white'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-                title="Simultaneous 360° Rotation and Runway Walk"
-              >
-                <RotateCw className={`w-3.5 h-3.5 ${animationMode === 'rotate_walk' ? 'animate-spin' : ''}`} style={animationMode === 'rotate_walk' ? { animationDuration: '4s' } : undefined} />
-                <span className="hidden sm:inline">Rotate & Walk</span>
-              </button>
-
-              <button
-                onClick={() => handleAnimationToggle('waves')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  animationMode === 'waves'
-                    ? 'bg-brand-500 text-white'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-                title="Fabric Wind Simulation Waves"
-              >
-                <Wind className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Fabric Waves</span>
-              </button>
-            </div>
-          )}
-
-          {/* Floating Position Guide Quick Trigger */}
-          <div className="absolute top-4 right-4 z-20">
-            <button
-              onClick={() => setPositionGuideOpen((prev) => !prev)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-extrabold shadow-lg transition-all ${
-                positionGuideOpen
-                  ? 'bg-brand-500 text-white'
-                  : 'bg-white/95 dark:bg-gray-900/95 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-800 hover:border-brand-500'
-              }`}
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>{positionGuideOpen ? 'Hide Position Guide' : 'Open Position Guide'}</span>
-            </button>
-          </div>
-
-          {/* Feedback Toast Notification */}
-          {feedback && (
-            <div className="absolute bottom-16 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-gray-900/95 text-white text-xs font-bold px-4 py-2 rounded-full shadow-2xl border border-gray-700 flex items-center gap-2 animate-fadeIn">
-              <CheckCircle className="w-4 h-4 text-brand-400 shrink-0" />
-              <span>{feedback}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Right Studio Controls Drawer */}
-        <aside className={`w-80 sm:w-96 border-l flex flex-col shrink-0 z-20 ${
-          theme === 'dark' ? 'bg-[#14171d] border-gray-800' : 'bg-white border-gray-200'
-        }`}>
-          {/* Studio Navigation Tabs */}
-          <div className="grid grid-cols-4 p-2 border-b border-gray-200 dark:border-gray-800 text-xs font-bold text-center">
-            {[
-              { id: 'design', label: 'Design' },
-              { id: 'color', label: 'Color' },
-              { id: 'motion', label: 'Motion' },
-              { id: 'export', label: 'Export' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-2 rounded-lg transition ${
-                  activeTab === tab.id
-                    ? 'bg-brand-500 text-white shadow-xs'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Drawer Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
-            {/* TAB 1: DESIGN & GRAPHICS STUDIO */}
+      {/* Drawer Scrollable Content */}
+      <div className={`flex-1 overflow-y-auto p-4 space-y-6 ${isMobile ? 'pb-10' : ''}`}>
+{/* TAB 1: DESIGN & GRAPHICS STUDIO */}
             {activeTab === 'design' && (
               <div className="space-y-5">
                 <div className="p-3.5 rounded-xl bg-gray-100 dark:bg-gray-850 border border-gray-200 dark:border-gray-750">
@@ -822,9 +435,506 @@ export default function OversizedApp() {
                 </div>
               </div>
             )}
+      </div>
+    </>
+  );
+
+  return () => {
+      sm.dispose();
+      sceneManagerRef.current = null;
+      if (typeof window !== 'undefined') {
+        window.__SCENE_MANAGER__ = null;
+        window.__IS_LOADED__ = false;
+      }
+    };
+  }, []);
+
+  // Sync garment color
+  const handleColorChange = (hex) => {
+    setGarmentColor(hex);
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.setGarmentColor(hex);
+    }
+  };
+
+  // Sync fabric finish
+  const handleFinishChange = (finish) => {
+    setFabricFinish(finish);
+    if (sceneManagerRef.current?.designManager) {
+      sceneManagerRef.current.designManager.setFabricFinish(finish);
+      showFeedback(`Fabric finish applied: ${finish.replace('_', ' ').toUpperCase()}`);
+    }
+  };
+
+  // Camera views
+  const handleCameraChange = (cam) => {
+    setCurrentCamera(cam);
+    const side = (cam === 'left' || cam === 'left_sleeve' || cam === 'lsleeve')
+      ? 'left_sleeve'
+      : (cam === 'right' || cam === 'right_sleeve' || cam === 'rsleeve')
+      ? 'right_sleeve'
+      : (cam === 'back' ? 'back' : 'front');
+    setActiveSide(side);
+
+    // If turntable or rotate_walk was active, pause rotation so view remains focused on chosen angle
+    if (animationMode === 'turntable' || animationMode === 'rotate_walk') {
+      setAnimationMode('none');
+      if (sceneManagerRef.current) {
+        sceneManagerRef.current.setAnimationMode('none');
+      }
+    }
+
+    // In 2D mode, if clicking left/right sleeve, auto-switch to 3D mode
+    if (viewMode === '2d' && (cam === 'left' || cam === 'right')) {
+      setViewMode('3d');
+      sceneManagerRef.current?.setViewMode?.('3d');
+    }
+
+    if (sceneManagerRef.current) {
+      if (typeof sceneManagerRef.current.setCameraPreset === 'function') {
+        sceneManagerRef.current.setCameraPreset(cam, isZoomed);
+      } else if (typeof sceneManagerRef.current.setCameraView === 'function') {
+        sceneManagerRef.current.setCameraView(cam, isZoomed);
+      }
+    }
+  };
+
+  // Motion modes
+  const handleAnimationToggle = (mode) => {
+    const next = animationMode === mode ? 'none' : mode;
+    setAnimationMode(next);
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.setAnimationMode(next);
+    }
+    showFeedback(next === 'none' ? 'Motion paused' : `${mode.replace('_', ' ').toUpperCase()} motion activated`);
+  };
+
+  // Quick file upload
+  const triggerUpload = (side = 'front') => {
+    uploadSideRef.current = side;
+    fileInputRef.current?.click();
+  };
+
+  const onFileInputChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !sceneManagerRef.current?.designManager) return;
+
+    if (file.size > 15 * 1024 * 1024) {
+      showFeedback('File too large (Max 15MB)');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const side = uploadSideRef.current;
+        const centerX = side === 'back' ? 1528 : (side === 'left_sleeve' ? 480 : (side === 'right_sleeve' ? 1528 : 480));
+        const centerY = (side === 'left_sleeve' || side === 'right_sleeve') ? 1840 : 960;
+
+        sceneManagerRef.current.designManager.addLayer({
+          type: 'image',
+          side: side,
+          image: img,
+          x: centerX,
+          y: centerY,
+          scale: 1.0,
+          rotation: 0,
+          printType: 'screen'
+        });
+
+        handleCameraChange(side);
+        setPositionGuideOpen(true);
+        showFeedback('Artwork uploaded • Position guide opened for exact alignment');
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleAddQuickText = (side = 'front') => {
+    if (!sceneManagerRef.current?.designManager) return;
+    const centerX = side === 'back' ? 1528 : (side === 'left_sleeve' ? 480 : (side === 'right_sleeve' ? 1528 : 480));
+    const centerY = (side === 'left_sleeve' || side === 'right_sleeve') ? 1840 : 960;
+
+    sceneManagerRef.current.designManager.addLayer({
+      type: 'text',
+      side: side,
+      text: 'OVERSIZED TEE',
+      textColor: garmentColor === '#ffffff' ? '#000000' : '#ffffff',
+      fontSize: 14,
+      fontFamily: 'Roboto',
+      x: centerX,
+      y: centerY,
+      scale: 1.0,
+      rotation: 0,
+      printType: 'screen'
+    });
+    handleCameraChange(side);
+    setPositionGuideOpen(true);
+    showFeedback('Text layer added');
+  };
+
+  const handleDeleteLayer = (id) => {
+    if (sceneManagerRef.current?.designManager) {
+      sceneManagerRef.current.designManager.removeLayer(id);
+      showFeedback('Layer deleted');
+    }
+  };
+
+  const handleShareDesign = () => {
+    const url = new URL(window.location.href);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url.toString());
+      showFeedback('Studio link copied to clipboard!');
+    } else {
+      prompt('Copy this link to share:', url.toString());
+    }
+  };
+
+  return (
+    <div className={`w-screen h-screen overflow-hidden flex flex-col font-sans select-none ${
+      theme === 'dark' ? 'bg-[#0f1115] text-gray-100' : 'bg-[#f4f5f7] text-gray-900'
+    }`}>
+      {/* Hidden File Input for Image Upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={onFileInputChange}
+      />
+
+      {/* Top Header Navigation */}
+      <header className={`h-14 sm:h-16 px-3 sm:px-6 flex items-center justify-between border-b shrink-0 z-20 ${
+        theme === 'dark' ? 'bg-[#14171d]/90 border-gray-800 backdrop-blur-md' : 'bg-white/90 border-gray-200 backdrop-blur-md'
+      }`}>
+        {/* Brand & Studio Title */}
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white font-extrabold text-xs sm:text-sm shadow-md shadow-brand-500/20 shrink-0">
+            VT
           </div>
+          <div className="truncate">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h1 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase text-gray-900 dark:text-white truncate">
+                VIRTUALTHREADS
+              </h1>
+              <span className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold uppercase bg-brand-500/15 text-brand-500 border border-brand-500/30 shrink-0">
+                Oversized
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block truncate">
+              Drop-shoulder streetwear cut • 240+ GSM Heavyweight Cotton • 3D & 2D Flat Mockup
+            </p>
+          </div>
+        </div>
+
+        {/* Header Right Actions */}
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* View Mode Toggle (3D vs 2D) */}
+          <div className="flex items-center p-0.5 rounded-lg bg-gray-200/80 dark:bg-gray-800 text-[11px] sm:text-xs font-bold">
+            <button
+              onClick={() => {
+                setViewMode('3d');
+                sceneManagerRef.current?.setViewMode?.('3d');
+              }}
+              className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md transition-all ${
+                viewMode === '3d'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              3D
+            </button>
+            <button
+              onClick={() => {
+                setViewMode('2d');
+                sceneManagerRef.current?.setViewMode?.('2d');
+              }}
+              className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md transition-all ${
+                viewMode === '2d'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              2D
+            </button>
+          </div>
+
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="p-1.5 sm:p-2 rounded-lg bg-gray-200/60 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition"
+            title="Toggle theme"
+          >
+            {theme === 'dark' ? <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+          </button>
+
+          {/* Share */}
+          <button
+            onClick={handleShareDesign}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-200/60 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700 transition"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Share</span>
+          </button>
+
+          {/* Export CTA */}
+          <button
+            onClick={() => {
+              setExportType('image');
+              setExportOpen(true);
+            }}
+            className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/25 transition active:scale-95"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline sm:inline">Export</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Studio Body */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Left Interactive Viewport */}
+        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+          {/* 3D WebGL Canvas Container */}
+          <div
+            ref={containerRef}
+            className={`w-full h-full relative cursor-grab active:cursor-grabbing transition-opacity duration-300 ${
+              viewMode === '3d' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0 absolute inset-0'
+            }`}
+          />
+
+          {/* 2D Flat View Overlay */}
+          {viewMode === '2d' && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+              <StaticGarmentView
+                garmentType="oversized_tee"
+                garmentColor={garmentColor}
+                activeSide={activeSide}
+                designManager={sceneManagerRef.current?.designManager}
+              />
+            </div>
+          )}
+
+          {/* Floating Viewport View Angle Bar */}
+          <div className="absolute top-2.5 left-2.5 sm:top-4 sm:left-4 z-20 flex items-center gap-0.5 sm:gap-1 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-gray-200/80 dark:border-gray-800">
+            {[
+              { id: 'front', label: 'Front' },
+              { id: 'back', label: 'Back' },
+              { id: 'left', label: 'LSLEEVE' },
+              { id: 'right', label: 'RSLEEVE' }
+            ].map(({ id, label }) => {
+              const isActive = currentCamera === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => handleCameraChange(id)}
+                  className={`px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold uppercase transition ${
+                    isActive
+                      ? 'bg-brand-500 text-white shadow-xs'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Floating Motion Controls (3D only) - Hidden on mobile if bottom sheet is open */}
+          {viewMode === '3d' && !mobileSheetOpen && (
+            <div className="absolute bottom-16 sm:bottom-4 left-2.5 sm:left-4 z-20 flex items-center gap-1 sm:gap-1.5 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md p-1 sm:p-1.5 rounded-xl shadow-lg border border-gray-200/80 dark:border-gray-800 max-w-[calc(100vw-20px)] overflow-x-auto scrollbar-none">
+              <button
+                onClick={() => handleAnimationToggle('turntable')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  animationMode === 'turntable'
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+                title="360° Continuous Turntable Spin"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Turntable</span>
+              </button>
+
+              <button
+                onClick={() => handleAnimationToggle('walking')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  animationMode === 'walking'
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+                title="Runway Walk Stride Animation"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Runway Walk</span>
+              </button>
+
+              <button
+                onClick={() => handleAnimationToggle('rotate_walk')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  animationMode === 'rotate_walk'
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+                title="Simultaneous 360° Rotation and Runway Walk"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${animationMode === 'rotate_walk' ? 'animate-spin' : ''}`} style={animationMode === 'rotate_walk' ? { animationDuration: '4s' } : undefined} />
+                <span className="hidden sm:inline">Rotate & Walk</span>
+              </button>
+
+              <button
+                onClick={() => handleAnimationToggle('waves')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  animationMode === 'waves'
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+                title="Fabric Wind Simulation Waves"
+              >
+                <Wind className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Fabric Waves</span>
+              </button>
+            </div>
+          )}
+
+          {/* Floating Position Guide Quick Trigger */}
+          <div className="absolute top-2.5 right-2.5 sm:top-4 sm:right-4 z-20">
+            <button
+              onClick={() => setPositionGuideOpen((prev) => !prev)}
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-extrabold shadow-lg transition-all ${
+                positionGuideOpen
+                  ? 'bg-brand-500 text-white'
+                  : 'bg-white/95 dark:bg-gray-900/95 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-800 hover:border-brand-500'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{positionGuideOpen ? 'Hide Position Guide' : 'Open Position Guide'}</span>
+              <span className="sm:hidden text-[10px]">{positionGuideOpen ? 'Hide' : 'Guide'}</span>
+            </button>
+          </div>
+
+          {/* Feedback Toast Notification */}
+          {feedback && (
+            <div className="absolute bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-gray-900/95 text-white text-xs font-bold px-4 py-2 rounded-full shadow-2xl border border-gray-700 flex items-center gap-2 animate-fadeIn whitespace-nowrap pointer-events-none">
+              <CheckCircle className="w-4 h-4 text-brand-400 shrink-0" />
+              <span>{feedback}</span>
+            </div>
+          )}
+        </div>
+
+                {/* Desktop Right Studio Controls Drawer (Hidden on Mobile) */}
+        <aside className={`hidden md:flex md:w-80 lg:w-96 border-l flex-col shrink-0 z-20 ${
+          theme === 'dark' ? 'bg-[#14171d] border-gray-800' : 'bg-white border-gray-200'
+        }`}>
+          {renderControls(false)}
         </aside>
       </div>
+
+      {/* Mobile Slide-up Bottom Sheet (md:hidden) */}
+      {mobileSheetOpen && (
+        <>
+          <div
+            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-30 animate-fadeIn"
+            onClick={() => setMobileSheetOpen(false)}
+          />
+          <div className={`md:hidden fixed bottom-0 left-0 right-0 z-40 rounded-t-2xl border-t shadow-2xl flex flex-col max-h-[82vh] transition-transform animate-slideUp ${
+            theme === 'dark' ? 'bg-[#14171d] border-gray-800 text-gray-100' : 'bg-white border-gray-200 text-gray-900'
+          }`}>
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-3.5 rounded-full bg-brand-500" />
+                <span className="text-xs font-extrabold uppercase tracking-wider">
+                  {activeTab.toUpperCase()} STUDIO
+                </span>
+              </div>
+              <button
+                onClick={() => setMobileSheetOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-800 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {renderControls(true)}
+          </div>
+        </>
+      )}
+
+      {/* Mobile Fixed Bottom Navigation Bar (md:hidden) */}
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-30 border-t backdrop-blur-xl px-2 py-1 flex items-center justify-around transition-all ${
+        theme === 'dark' ? 'bg-[#14171d]/95 border-gray-800 text-gray-400' : 'bg-white/95 border-gray-200 text-gray-500'
+      }`}>
+        <button
+          onClick={() => {
+            setActiveTab('design');
+            setMobileSheetOpen(true);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition ${
+            mobileSheetOpen && activeTab === 'design'
+              ? 'text-brand-500 font-extrabold'
+              : 'hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <UploadCloud className="w-4 h-4" />
+          <span className="text-[10px] font-bold">Design</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('color');
+            setMobileSheetOpen(true);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition ${
+            mobileSheetOpen && activeTab === 'color'
+              ? 'text-brand-500 font-extrabold'
+              : 'hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span className="text-[10px] font-bold">Color</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('motion');
+            setMobileSheetOpen(true);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition ${
+            mobileSheetOpen && activeTab === 'motion'
+              ? 'text-brand-500 font-extrabold'
+              : 'hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <RotateCw className={`w-4 h-4 ${animationMode === 'turntable' || animationMode === 'rotate_walk' ? 'animate-spin' : ''}`} />
+          <span className="text-[10px] font-bold">Motion</span>
+        </button>
+
+        <button
+          onClick={() => setPositionGuideOpen((prev) => !prev)}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition ${
+            positionGuideOpen
+              ? 'text-brand-500 font-extrabold'
+              : 'hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span className="text-[10px] font-bold">Guide</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setExportType('image');
+            setExportOpen(true);
+          }}
+          className="flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-brand-500 font-bold transition hover:opacity-80"
+        >
+          <Download className="w-4 h-4" />
+          <span className="text-[10px]">Export</span>
+        </button>
+      </nav>
 
       {/* Standalone Position Guide Modal Overlay */}
       {positionGuideOpen && (
