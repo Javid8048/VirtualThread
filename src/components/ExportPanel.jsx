@@ -33,12 +33,13 @@ export function ExportPanel({
   isOpen = true,
   onClose,
   defaultTab = 'video',
+  initialTab,
   sceneManager,
   backdropMode = 'dark',
   asyncExportState,
   setAsyncExportState
 }) {
-  const [activeTab, setActiveTab] = useState(defaultTab); // 'video' | 'image' | 'gltf' | 'techpack'
+  const [activeTab, setActiveTab] = useState(initialTab || defaultTab || 'video'); // 'video' | 'image' | 'gltf' | 'techpack'
   const [imageRes, setImageRes] = useState('4k');
   const [imageFormat, setImageFormat] = useState('png'); // 'png' | 'jpg'
   const [isGeneratingTechPack, setIsGeneratingTechPack] = useState(false);
@@ -47,8 +48,9 @@ export function ExportPanel({
   const [isExportingDual, setIsExportingDual] = useState(false);
 
   useEffect(() => {
-    if (defaultTab) setActiveTab(defaultTab);
-  }, [defaultTab]);
+    const t = initialTab || defaultTab;
+    if (t) setActiveTab(t);
+  }, [initialTab, defaultTab]);
 
   // Video recording state
   const [videoFps, setVideoFps] = useState(30); // 30 | 60 | 24 - Default is 30 for silky-smooth motion

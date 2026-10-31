@@ -120,11 +120,11 @@ export class CanvasDesignManager {
       defaultX = isHoodie ? 416 : 1528;
       defaultY = isHoodie ? 1530 : 1528;
     } else if (side === 'left_sleeve') {
-      defaultX = 1660;
-      defaultY = 770;
+      defaultX = 480;
+      defaultY = 1840;
     } else if (side === 'right_sleeve') {
-      defaultX = 1660;
-      defaultY = 1520;
+      defaultX = 1528;
+      defaultY = 1840;
     } else {
       defaultX = isHoodie ? 430 : 480;
       defaultY = isHoodie ? 730 : 720;

@@ -19,8 +19,8 @@ import {
   Layers,
   Trash2,
   ZoomIn,
-  ZoomOut
-} from 'lucide-react';
+  ZoomOut,
+  X} from 'lucide-react';
 import { SceneManager } from './three/SceneManager';
 import { PositionGuide } from './components/PositionGuide';
 import { ExportPanel } from './components/ExportPanel';
@@ -150,8 +150,12 @@ export default function OversizedApp() {
   // Sync fabric finish
   const handleFinishChange = (finish) => {
     setFabricFinish(finish);
-    if (sceneManagerRef.current?.designManager) {
-      sceneManagerRef.current.designManager.setFabricFinish(finish);
+    if (sceneManagerRef.current) {
+      if (typeof sceneManagerRef.current.setFabricFinish === 'function') {
+        sceneManagerRef.current.setFabricFinish(finish);
+      } else if (sceneManagerRef.current.designManager) {
+        sceneManagerRef.current.designManager.setFabricFinish(finish);
+      }
       showFeedback(`Fabric finish applied: ${finish.replace('_', ' ').toUpperCase()}`);
     }
   };
@@ -175,7 +179,7 @@ export default function OversizedApp() {
     }
 
     // In 2D mode, if clicking left/right sleeve, auto-switch to 3D mode
-    if (viewMode === '2d' && (cam === 'left' || cam === 'right')) {
+    if (viewMode === '2d' && (cam === 'left' || cam === 'right' || cam === 'left_sleeve' || cam === 'right_sleeve')) {
       setViewMode('3d');
       sceneManagerRef.current?.setViewMode?.('3d');
     }
@@ -396,7 +400,7 @@ export default function OversizedApp() {
                     {layers.map((l, idx) => (
                       <div
                         key={l.id}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 text-xs"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 text-xs cursor-pointer hover:border-brand-500 transition" onClick={() => { handleCameraChange(l.side); setPositionGuideOpen(true); sceneManagerRef.current?.designManager?.setActiveLayer(l.id); }}
                       >
                         <div className="flex items-center gap-2.5 truncate">
                           <span className="text-[10px] font-mono font-bold text-gray-400">#{idx + 1}</span>
@@ -714,6 +718,17 @@ export default function OversizedApp() {
                 garmentType="oversized_tee"
                 garmentColor={garmentColor}
                 activeSide={activeSide}
+                onSideChange={(side) => handleCameraChange(side)}
+                onSwitchTo3D={() => {
+                  setViewMode('3d');
+                  sceneManagerRef.current?.setViewMode?.('3d');
+                }}
+                onOpenExport={() => {
+                  setExportType('image');
+                  setExportOpen(true);
+                }}
+                theme={theme}
+                onToggleTheme={toggleTheme}
                 designManager={sceneManagerRef.current?.designManager}
               />
             </div>
@@ -958,6 +973,7 @@ export default function OversizedApp() {
           sceneManager={sceneManagerRef.current}
           garmentType="oversized_tee"
           initialTab={exportType}
+          defaultTab={exportType}
         />
       )}
     </div>

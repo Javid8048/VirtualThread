@@ -1724,6 +1724,27 @@ export class SceneManager {
     updateMeshColors(this.attachmentsGroup);
   }
 
+  setFabricFinish(finish) {
+    this.fabricFinish = finish;
+    if (this.shirtMaterial) {
+      if (finish === 'heavy_terry') {
+        this.shirtMaterial.roughness = 0.94;
+        this.shirtMaterial.metalness = 0.04;
+      } else if (finish === 'mineral_wash') {
+        this.shirtMaterial.roughness = 0.88;
+        this.shirtMaterial.metalness = 0.08;
+      } else {
+        // combed_cotton
+        this.shirtMaterial.roughness = 0.82;
+        this.shirtMaterial.metalness = 0.05;
+      }
+      this.shirtMaterial.needsUpdate = true;
+    }
+    if (this.designManager) {
+      this.designManager.setFabricFinish(finish);
+    }
+  }
+
   setGarmentColor(hex, immediate = false) {
     let resolvedHex = hex || '#ffffff';
     if (this.isBlackColor(resolvedHex)) {
