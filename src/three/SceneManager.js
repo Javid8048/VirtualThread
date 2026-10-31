@@ -2992,6 +2992,10 @@ export class SceneManager {
     return await this.setCameraPreset(this.currentCameraView || 'front', this.isZoomed);
   }
 
+  setCameraView(view, isZoomed) {
+    return this.setCameraPreset(view, isZoomed);
+  }
+
   setCameraPreset(view, isZoomed = this.isZoomed) {
     if (typeof isZoomed === 'boolean') {
       this.isZoomed = isZoomed;
@@ -3009,6 +3013,10 @@ export class SceneManager {
       effectiveView = view;
     } else {
       effectiveView = this.currentCameraView || 'front';
+    }
+
+    if (this.tshirtPivot && this.animationMode !== 'turntable' && this.animationMode !== 'rotate_walk') {
+      this.tshirtPivot.rotation.y = 0;
     }
 
     return new Promise((resolve) => {
@@ -3048,9 +3056,13 @@ export class SceneManager {
             break;
           case 'side':
           case 'right':
+          case 'right_sleeve':
+          case 'rsleeve':
             targetPos.set(dist, centerY, 0);
             break;
           case 'left':
+          case 'left_sleeve':
+          case 'lsleeve':
             targetPos.set(-dist, centerY, 0);
             break;
           case 'hero':

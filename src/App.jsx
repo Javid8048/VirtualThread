@@ -158,14 +158,33 @@ export default function OversizedApp() {
   // Camera views
   const handleCameraChange = (cam) => {
     setCurrentCamera(cam);
-    const side = (cam === 'left' || cam === 'left_sleeve')
+    const side = (cam === 'left' || cam === 'left_sleeve' || cam === 'lsleeve')
       ? 'left_sleeve'
-      : (cam === 'right' || cam === 'right_sleeve')
+      : (cam === 'right' || cam === 'right_sleeve' || cam === 'rsleeve')
       ? 'right_sleeve'
       : (cam === 'back' ? 'back' : 'front');
     setActiveSide(side);
+
+    // If turntable or rotate_walk was active, pause rotation so view remains focused on chosen angle
+    if (animationMode === 'turntable' || animationMode === 'rotate_walk') {
+      setAnimationMode('none');
+      if (sceneManagerRef.current) {
+        sceneManagerRef.current.setAnimationMode('none');
+      }
+    }
+
+    // In 2D mode, if clicking left/right sleeve, auto-switch to 3D mode
+    if (viewMode === '2d' && (cam === 'left' || cam === 'right')) {
+      setViewMode('3d');
+      sceneManagerRef.current?.setViewMode?.('3d');
+    }
+
     if (sceneManagerRef.current) {
-      sceneManagerRef.current.setCameraView(cam);
+      if (typeof sceneManagerRef.current.setCameraPreset === 'function') {
+        sceneManagerRef.current.setCameraPreset(cam, isZoomed);
+      } else if (typeof sceneManagerRef.current.setCameraView === 'function') {
+        sceneManagerRef.current.setCameraView(cam, isZoomed);
+      }
     }
   };
 
@@ -176,7 +195,7 @@ export default function OversizedApp() {
     if (sceneManagerRef.current) {
       sceneManagerRef.current.setAnimationMode(next);
     }
-    showFeedback(next === 'none' ? 'Motion paused' : `${mode.toUpperCase()} motion activated`);
+    showFeedback(next === 'none' ? 'Motion paused' : `${mode.replace('_', ' ').toUpperCase()} motion activated`);
   };
 
   // Quick file upload
@@ -391,19 +410,24 @@ export default function OversizedApp() {
 
           {/* Floating Viewport View Angle Bar */}
           <div className="absolute top-4 left-4 z-20 flex items-center gap-1 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-gray-200/80 dark:border-gray-800">
-            {['front', 'back', 'left', 'right'].map((cam) => {
-              const isActive = currentCamera === cam;
+            {[
+              { id: 'front', label: 'Front' },
+              { id: 'back', label: 'Back' },
+              { id: 'left', label: 'LSLEEVE' },
+              { id: 'right', label: 'RSLEEVE' }
+            ].map(({ id, label }) => {
+              const isActive = currentCamera === id;
               return (
                 <button
-                  key={cam}
-                  onClick={() => handleCameraChange(cam)}
+                  key={id}
+                  onClick={() => handleCameraChange(id)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition ${
                     isActive
                       ? 'bg-brand-500 text-white shadow-xs'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
-                  {cam === 'left' ? 'L Sleeve' : cam === 'right' ? 'R Sleeve' : cam}
+                  {label}
                 </button>
               );
             })}
@@ -419,10 +443,36 @@ export default function OversizedApp() {
                     ? 'bg-brand-500 text-white'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
-                title="360┬░ Continuous Turntable Spin"
+                title="360° Continuous Turntable Spin"
               >
                 <RotateCw className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Turntable</span>
+              </button>
+
+              <button
+                onClick={() => handleAnimationToggle('walking')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  animationMode === 'walking'
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+                title="Runway Walk Stride Animation"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Runway Walk</span>
+              </button>
+
+              <button
+                onClick={() => handleAnimationToggle('rotate_walk')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  animationMode === 'rotate_walk'
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+                title="Simultaneous 360° Rotation and Runway Walk"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${animationMode === 'rotate_walk' ? 'animate-spin' : ''}`} style={animationMode === 'rotate_walk' ? { animationDuration: '4s' } : undefined} />
+                <span className="hidden sm:inline">Rotate & Walk</span>
               </button>
 
               <button
@@ -436,19 +486,6 @@ export default function OversizedApp() {
               >
                 <Wind className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Fabric Waves</span>
-              </button>
-
-              <button
-                onClick={() => handleAnimationToggle('walking')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  animationMode === 'walking'
-                    ? 'bg-brand-500 text-white'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-                title="Runway Stride Walk Animation"
-              >
-                <Play className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Runway Walk</span>
               </button>
             </div>
           )}
@@ -710,9 +747,10 @@ export default function OversizedApp() {
                   3D Animation Modes
                 </label>
                 {[
-                  { id: 'turntable', name: '360┬░ Turntable Rotation', desc: 'Smooth continuous spin of the oversized blank' },
-                  { id: 'waves', name: 'Fabric Wind Waves', desc: 'Realistic micro-cloth wave dynamics' },
+                  { id: 'rotate_walk', name: 'Rotate & Runway Walk', desc: 'Simultaneous 360° continuous turntable spin during catwalk runway walk' },
+                  { id: 'turntable', name: '360° Turntable Rotation', desc: 'Smooth continuous spin of the oversized blank' },
                   { id: 'walking', name: 'Runway Walk Stride', desc: 'Streetwear catwalk stride animation' },
+                  { id: 'waves', name: 'Fabric Wind Waves', desc: 'Realistic micro-cloth wave dynamics' },
                   { id: 'none', name: 'Static Studio View', desc: 'Fixed resting position for precision design' }
                 ].map((m) => (
                   <button
