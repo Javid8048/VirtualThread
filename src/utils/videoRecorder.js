@@ -1,10 +1,9 @@
 /**
  * CanvasVideoRecorder
- * High-performance 60 FPS hardware video recorder for VirtualThreads 3D Studio.
+ * High-performance hardware video and screen recorder for VirtualThreads 3D Studio.
  *
- * Captures silky-smooth 60 FPS video directly from the WebGL canvas using MediaRecorder
- * with hardware-accelerated GPU stream encoding, preserving the exact camera zoom,
- * background, lighting, and animation speeds.
+ * Supports both ultra-smooth 60 FPS browser tab screen recording via getDisplayMedia
+ * and direct hardware-accelerated WebGL canvas stream capture into universal MP4 video.
  */
 export class CanvasVideoRecorder {
   constructor(canvasOrSceneManager) {
@@ -23,129 +22,160 @@ export class CanvasVideoRecorder {
     this.stopTimeout = null;
     this.safetyFinalizeTimeout = null;
     this._finalizePromise = null;
+    this.activeStream = null;
+    this.isScreenCapture = false;
   }
 
   /**
-   * Selects the highest quality supported MIME type for 60 FPS recording.
+   * Selects the highest quality supported MIME type for video recording.
+   * Universal MP4 container with H.264/AVC hardware acceleration is prioritized.
    */
-  static getSupportedMimeType(preferredFormat = 'webm') {
+  static getSupportedMimeType(preferredFormat = 'mp4') {
     if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
-      return 'video/webm';
+      return '';
     }
 
-    if (preferredFormat === 'mp4') {
-      const mp4Candidates = [
-        'video/mp4;codecs=avc1.640028,mp4a.40.2',
-        'video/mp4;codecs=avc1',
-        'video/mp4'
-      ];
-      for (const mime of mp4Candidates) {
-        if (MediaRecorder.isTypeSupported(mime)) return mime;
-      }
-    }
-
-    const webmCandidates = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm'
+    const mp4Candidates = [
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4;codecs=avc1.640028,mp4a.40.2',
+      'video/mp4;codecs=avc1',
+      'video/mp4;codecs=h264',
+      'video/mp4'
     ];
-    for (const mime of webmCandidates) {
+    for (const mime of mp4Candidates) {
       if (MediaRecorder.isTypeSupported(mime)) return mime;
     }
 
-    return 'video/webm';
+    const fallbackCandidates = [
+      'video/webm;codecs=h264',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    for (const mime of fallbackCandidates) {
+      if (MediaRecorder.isTypeSupported(mime)) return mime;
+    }
+
+    return '';
   }
 
   /**
-   * Starts recording the 3D studio canvas directly at 60 FPS with hardware acceleration.
-   * Preserves the active zoom, camera angle, animation speed, and studio background.
+   * Starts recording the 3D studio with silky-smooth 60 FPS motion.
+   * Prioritizes native browser screen recording (getDisplayMedia) for 100% smooth capture.
    * @param {Object} options
+   * @param {number} options.fps - Frame rate (30 or 60)
    * @param {number} options.durationSeconds - Duration in seconds (1 to 30)
    * @param {'mobile' | 'desktop' | 'square'} options.format - Video aspect ratio
    * @param {'current' | 'showcase360'} options.motion - Motion mode
-   * @param {'webm' | 'mp4'} options.preferredFormat - Preferred video format
+   * @param {'screen' | 'canvas'} options.source - 'screen' for ultra-smooth screen capture, 'canvas' for direct WebGL
+   * @param {'mp4'} options.preferredFormat - Preferred video format
    * @param {string} options.backgroundColor - Studio background color
+   * @param {HTMLElement} options.cropElement - Element to crop screen recording to (Region Capture)
    * @param {Function} onProgress - Callback (pct: number, elapsedSec: number)
    */
-  startRecording(
+  async startRecording(
     {
-      fps = 24,
+      fps = 60,
       durationSeconds = 5,
       format = 'desktop',
       motion = 'current',
-      preferredFormat = 'webm',
-      backgroundColor = null
+      source = 'screen',
+      preferredFormat = 'mp4',
+      backgroundColor = null,
+      cropElement = null
     } = {},
     onProgress = () => {}
   ) {
+    if (!this.canvas && !this.sceneManager) {
+      throw new Error('Canvas or 3D scene is not available for video recording.');
+    }
+
+    const targetFps = Number(fps) || 60;
+    let stream = null;
+    let isScreen = false;
+
+    // 1. Screen Recording via getDisplayMedia for silky-smooth 60 FPS capture
+    if (source === 'screen' && typeof navigator !== 'undefined' && navigator.mediaDevices?.getDisplayMedia) {
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            displaySurface: 'browser',
+            frameRate: { ideal: targetFps, max: 60 },
+            cursor: 'never'
+          },
+          audio: false,
+          preferCurrentTab: true,
+          selfBrowserSurface: 'include'
+        });
+        isScreen = true;
+
+        // If Region Capture is supported (Chrome 104+), crop screen capture directly to 3D studio viewport
+        const [videoTrack] = stream.getVideoTracks();
+        const targetCropEl = cropElement || (this.sceneManager && this.sceneManager.container) || this.canvas;
+        if (window.CropTarget && typeof CropTarget.fromElement === 'function' && videoTrack && typeof videoTrack.cropTo === 'function' && targetCropEl) {
+          try {
+            const cropTarget = await CropTarget.fromElement(targetCropEl);
+            await videoTrack.cropTo(cropTarget);
+          } catch (cropErr) {
+            // Region crop fallback - continues with full tab stream smoothly
+          }
+        }
+      } catch (err) {
+        if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+          throw new Error('Screen recording permission was cancelled. You can grant permission or switch to Direct Canvas mode.');
+        }
+        console.warn('Screen recording displayMedia failed, attempting direct canvas stream:', err);
+      }
+    }
+
+    // 2. Direct Canvas stream fallback
+    if (!stream) {
+      const captureCanvas = (this.sceneManager && this.sceneManager.recordingCanvas)
+        ? this.sceneManager.recordingCanvas
+        : this.canvas;
+
+      if (captureCanvas && captureCanvas.captureStream) {
+        stream = captureCanvas.captureStream(targetFps);
+      }
+    }
+
+    if (!stream) {
+      throw new Error('Browser does not support canvas or screen video capture.');
+    }
+
+    this.activeStream = stream;
+    this.isScreenCapture = isScreen;
+
+    // Listen to native "Stop sharing" event from browser banner to stop cleanly
+    const [streamTrack] = stream.getVideoTracks();
+    if (streamTrack) {
+      streamTrack.addEventListener('ended', () => {
+        this.stopEarly();
+      });
+    }
+
+    // Initialize SceneManager video session (avoiding heavy canvas resize stalls during screen recording)
+    if (this.sceneManager && this.sceneManager.startVideoRecording) {
+      this.sceneManager.startVideoRecording({
+        fps: targetFps,
+        durationSeconds,
+        format,
+        motion,
+        backgroundColor,
+        isScreenSource: isScreen
+      });
+    }
+
     return new Promise((resolve, reject) => {
       try {
-        if (!this.canvas) {
-          reject(new Error('Canvas element is not available for video recording.'));
-          return;
-        }
-
-        const targetFps = Number(fps) || 24;
-
-        // Instruct SceneManager to initialize video recording session and setup offscreen canvas
-        if (this.sceneManager && this.sceneManager.startVideoRecording) {
-          this.sceneManager.startVideoRecording({
-            fps: targetFps,
-            durationSeconds,
-            format,
-            motion,
-            backgroundColor
-          });
-        }
-
-        // Direct hardware-accelerated video stream from formatted recording canvas (1080x1920 for mobile, 1080x1080 for square, 1920x1080 for desktop)
-        const captureCanvas = (this.sceneManager && this.sceneManager.recordingCanvas)
-          ? this.sceneManager.recordingCanvas
-          : this.canvas;
-
-        let stream = null;
-        let capturedTrack = null;
-        let useManualFrameRequest = false;
-
-        // Attempt deterministic frame-by-frame capture using track.requestFrame if supported
-        try {
-          if (captureCanvas.captureStream) {
-            const candidateStream = captureCanvas.captureStream(0);
-            const tracks = candidateStream ? candidateStream.getVideoTracks() : [];
-            if (tracks && tracks.length > 0 && typeof tracks[0].requestFrame === 'function') {
-              stream = candidateStream;
-              capturedTrack = tracks[0];
-              useManualFrameRequest = true;
-            }
-          }
-        } catch (e) {
-          useManualFrameRequest = false;
-        }
-
-        // Fallback to standard captureStream(targetFps) if manual frame capture is unavailable
-        if (!useManualFrameRequest || !stream) {
-          stream = captureCanvas.captureStream ? captureCanvas.captureStream(targetFps) : null;
-        }
-
-        if (!stream) {
-          if (this.sceneManager && this.sceneManager.stopVideoRecording) {
-            this.sceneManager.stopVideoRecording();
-          }
-          reject(new Error('Browser does not support canvas video capture (captureStream).'));
-          return;
-        }
-
         const selectedMime = CanvasVideoRecorder.getSupportedMimeType(preferredFormat);
-        const options = {
-          mimeType: selectedMime,
-          videoBitsPerSecond: 8000000 // 8 Mbps: pristine 1080p clarity with smooth hardware encoding
-        };
+        const options = selectedMime
+          ? { mimeType: selectedMime, videoBitsPerSecond: 8000000 }
+          : { videoBitsPerSecond: 8000000 };
 
         this.recordedChunks = [];
         this.mediaRecorder = new MediaRecorder(stream, options);
 
-        // Keep mobile display active during recording to prevent corruption or throttling
+        // Keep display awake during recording
         let screenWakeLock = null;
         if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
           navigator.wakeLock.request('screen')
@@ -155,6 +185,12 @@ export class CanvasVideoRecorder {
 
         const cleanup = () => {
           this.isRecording = false;
+          if (this.activeStream) {
+            try {
+              this.activeStream.getTracks().forEach((t) => t.stop());
+            } catch (e) {}
+            this.activeStream = null;
+          }
           if (this.sceneManager) {
             this.sceneManager.onRecordingFrame = null;
           }
@@ -191,9 +227,10 @@ export class CanvasVideoRecorder {
             return;
           }
 
-          const blob = new Blob(this.recordedChunks, { type: selectedMime });
-          const isMp4 = selectedMime.includes('mp4');
-          resolve({ blob, mimeType: selectedMime, isMp4, format, durationSeconds });
+          const mimeResult = selectedMime || this.mediaRecorder.mimeType || 'video/mp4';
+          const blob = new Blob(this.recordedChunks, { type: mimeResult });
+          const isMp4 = !mimeResult.includes('webm');
+          resolve({ blob, mimeType: mimeResult, isMp4, format, durationSeconds, isScreenCapture: isScreen });
         };
 
         this._finalizePromise = finalize;
@@ -214,54 +251,36 @@ export class CanvasVideoRecorder {
         };
 
         this.isRecording = true;
-        const totalDurationMs = Math.max(1, durationSeconds * 1000);
-        const totalTargetFrames = Math.max(1, Math.round(durationSeconds * targetFps));
-        let recordedFrameCount = 0;
+        const totalDurationMs = Math.max(1000, durationSeconds * 1000);
         const startTime = performance.now();
 
-        // Connect scene manager frame render callback for exact frame submission and smooth progress
-        if (this.sceneManager) {
-          this.sceneManager.onRecordingFrame = () => {
-            if (!this.isRecording) return;
-            if (useManualFrameRequest && capturedTrack) {
-              try {
-                capturedTrack.requestFrame();
-              } catch (e) {}
-            }
-            recordedFrameCount++;
-            const pct = Math.min(99, Math.round((recordedFrameCount / totalTargetFrames) * 100));
-            const sec = Math.min(durationSeconds, +(recordedFrameCount / targetFps).toFixed(1));
-            onProgress(pct, sec);
-
-            if (recordedFrameCount >= totalTargetFrames) {
-              this.stopEarly();
-            }
-          };
-        }
-
-        // Timer-based progress updater for standard captureStream fallback
-        if (!useManualFrameRequest) {
-          this.progressTimer = setInterval(() => {
-            if (!this.isRecording) {
-              clearInterval(this.progressTimer);
-              return;
-            }
-            const elapsedMs = performance.now() - startTime;
-            const pct = Math.min(99, Math.round((elapsedMs / totalDurationMs) * 100));
-            const sec = Math.min(durationSeconds, +(elapsedMs / 1000).toFixed(1));
-            onProgress(pct, sec);
-          }, 50);
-        }
+        // High-precision smooth progress updates
+        this.progressTimer = setInterval(() => {
+          if (!this.isRecording) {
+            clearInterval(this.progressTimer);
+            return;
+          }
+          const elapsedMs = performance.now() - startTime;
+          const pct = Math.min(99, Math.round((elapsedMs / totalDurationMs) * 100));
+          const sec = Math.min(durationSeconds, +(elapsedMs / 1000).toFixed(1));
+          onProgress(pct, sec);
+        }, 50);
 
         // Start continuous recording
-        this.mediaRecorder.start();
+        this.mediaRecorder.start(100);
 
-        // Safety fallback timer to conclude recording
+        // Conclude recording after specified duration
         this.stopTimeout = setTimeout(() => {
           this.stopEarly();
-        }, totalDurationMs + 100);
+        }, totalDurationMs);
       } catch (err) {
         this.isRecording = false;
+        if (this.activeStream) {
+          try {
+            this.activeStream.getTracks().forEach((t) => t.stop());
+          } catch (e) {}
+          this.activeStream = null;
+        }
         if (this.sceneManager && this.sceneManager.stopVideoRecording) {
           this.sceneManager.stopVideoRecording();
         }
@@ -291,16 +310,16 @@ export class CanvasVideoRecorder {
         } catch (err) {}
       }
 
-      // Safety finalization fallback if onstop is delayed
+      // Safety finalization fallback if onstop event is delayed
       this.safetyFinalizeTimeout = setTimeout(() => {
         if (typeof this._finalizePromise === 'function') {
           this._finalizePromise();
         }
-      }, 500);
+      }, 400);
     }
   }
 
-  downloadBlob(blob, filename = 'virtualthreads-animation.webm') {
+  downloadBlob(blob, filename = 'virtualthreads-animation.mp4') {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';

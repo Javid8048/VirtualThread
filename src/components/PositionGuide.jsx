@@ -162,8 +162,8 @@ export function PositionGuide({
   const handleAddText = () => {
     if (!designManager) return;
     const isHoodie = currentGarmentType === 'hoodie' || currentGarmentType === 'zip_hoodie';
-    const centerX = isHoodie ? (selectedSide === 'back' ? 416 : 430) : (selectedSide === 'back' ? 1528 : (selectedSide === 'left_sleeve' ? 480 : (selectedSide === 'right_sleeve' ? 1528 : 480)));
-    const centerY = isHoodie ? (selectedSide === 'back' ? 1530 : 730) : ((selectedSide === 'left_sleeve' || selectedSide === 'right_sleeve') ? 1840 : 920);
+    const centerX = isHoodie ? (selectedSide === 'back' ? 416 : 430) : (selectedSide === 'back' ? 1528 : 480);
+    const centerY = isHoodie ? (selectedSide === 'back' ? 1530 : 730) : 920;
     const textToAdd = textInput.trim() || 'CUSTOM TEXT';
     const newLayer = designManager.addLayer({
       type: 'text',
@@ -255,8 +255,8 @@ export function PositionGuide({
       const img = new Image();
       img.onload = () => {
         const isHoodie = currentGarmentType === 'hoodie' || currentGarmentType === 'zip_hoodie';
-        const centerX = isHoodie ? (selectedSide === 'back' ? 416 : 430) : (selectedSide === 'back' ? 1528 : (selectedSide === 'left_sleeve' ? 480 : (selectedSide === 'right_sleeve' ? 1528 : 480)));
-        const centerY = isHoodie ? (selectedSide === 'back' ? 1530 : 730) : ((selectedSide === 'left_sleeve' || selectedSide === 'right_sleeve') ? 1840 : (selectedSide === 'back' ? 1528 : 720));
+        const centerX = isHoodie ? (selectedSide === 'back' ? 416 : 430) : (selectedSide === 'back' ? 1528 : 480);
+        const centerY = isHoodie ? (selectedSide === 'back' ? 1530 : 730) : (selectedSide === 'back' ? 1528 : 720);
         const newLayer = designManager.addLayer({
           type: 'image',
           side: selectedSide,

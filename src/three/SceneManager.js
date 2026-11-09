@@ -48,8 +48,8 @@ function applyInsideFabricShader(material, getInsideColor, getAcidWashIntensity,
     shader.uniforms.uKnitProgress = { value: 1.0 };
     shader.uniforms.uKnitTime = { value: 0.0 };
     shader.uniforms.uFabricMicroNormalMap = { value: fabricMicroNormalMap };
-    shader.uniforms.uFabricMicroRepeat = { value: new THREE.Vector2(36.0, 36.0) };
-    shader.uniforms.uFabricMicroScale = { value: 0.60 };
+    shader.uniforms.uFabricMicroRepeat = { value: new THREE.Vector2(110.0, 110.0) };
+    shader.uniforms.uFabricMicroScale = { value: 0.45 };
     shader.uniforms.uHasFabricMicroNormal = { value: fabricMicroNormalMap ? 1.0 : 0.0 };
 
     shader.fragmentShader = `
@@ -463,19 +463,20 @@ export class SceneManager {
     this.jerseyNormalMap = normalMap;
     this.aoTexture = aoTexture;
 
-    // Clean, 100% photorealistic soft matte cotton cloth material with dynamic canvas
+    // Clean, photorealistic soft matte cotton cloth material with dynamic canvas
     this.shirtMaterial = new THREE.MeshPhysicalMaterial({
       map: this.designManager.texture,
       color: new THREE.Color(0xffffff),
-      roughness: 0.98,
+      roughness: 0.94,
       metalness: 0.0,
-      sheen: 0.15,
-      sheenRoughness: 0.75,
+      sheen: 0.95,
+      sheenRoughness: 0.48,
+      specularIntensity: 0.18,
       clearcoat: 0.0,
       normalMap: normalMap,
-      normalScale: new THREE.Vector2(0.22, 0.22),
+      normalScale: new THREE.Vector2(0.35, 0.35),
       aoMap: aoTexture,
-      aoMapIntensity: 0.60,
+      aoMapIntensity: 0.55,
       side: THREE.DoubleSide
     });
     applyInsideFabricShader(this.shirtMaterial, () => this.garmentColor, null, fabricMicroNormalMap);
@@ -483,15 +484,16 @@ export class SceneManager {
     this.fabricMaterial = new THREE.MeshPhysicalMaterial({
       map: this.designManager.texture,
       color: new THREE.Color(0xffffff),
-      roughness: 0.98,
+      roughness: 0.94,
       metalness: 0.0,
-      sheen: 0.15,
-      sheenRoughness: 0.75,
+      sheen: 0.95,
+      sheenRoughness: 0.48,
+      specularIntensity: 0.18,
       clearcoat: 0.0,
       normalMap: normalMap,
-      normalScale: new THREE.Vector2(0.22, 0.22),
+      normalScale: new THREE.Vector2(0.35, 0.35),
       aoMap: aoTexture,
-      aoMapIntensity: 0.60,
+      aoMapIntensity: 0.55,
       side: THREE.DoubleSide
     });
     applyInsideFabricShader(this.fabricMaterial, () => this.garmentColor, null, fabricMicroNormalMap);
@@ -554,7 +556,6 @@ export class SceneManager {
         if (onComplete) onComplete();
       });
     } else if (family === 'regular_tee') {
-      this.loadTshirtModel();
       this.loadRegularTeeModel(() => {
         this.applyGarmentTypeVisibility();
         this.triggerLoadedIfReady();
@@ -790,20 +791,22 @@ export class SceneManager {
     if (onDone) this.regularTeeCallbacks.push(onDone);
 
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath(getAssetUrl('/draco/gltf/'));
+    const dracoPath = getAssetUrl('/draco/gltf/').split('?')[0].replace(/\/+$/, '') + '/';
+    dracoLoader.setDecoderPath(dracoPath);
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
 
     // Dedicated soft matte textile finish for regular t-shirt
     this.regularTeeMaterial = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color(this.garmentColor || '#ffffff'),
-      roughness: 0.98,
+      roughness: 0.94,
       metalness: 0.0,
-      sheen: 0.15,
-      sheenRoughness: 0.75,
+      sheen: 0.95,
+      sheenRoughness: 0.48,
+      specularIntensity: 0.18,
       clearcoat: 0.0,
       normalMap: this.jerseyNormalMap || null,
-      normalScale: new THREE.Vector2(0.22, 0.22),
+      normalScale: new THREE.Vector2(0.35, 0.35),
       side: THREE.DoubleSide
     });
 
@@ -815,7 +818,17 @@ export class SceneManager {
       false
     );
 
+    let meshFinalized = false;
+    let fallbackSafetyTimer = null;
+
     const finalizeMesh = (mesh) => {
+      if (meshFinalized) return;
+      meshFinalized = true;
+      if (fallbackSafetyTimer) {
+        clearTimeout(fallbackSafetyTimer);
+        fallbackSafetyTimer = null;
+      }
+
       this.regularTeeRoot = new THREE.Group();
       this.regularTeeRoot.name = 'regular_tee_root';
 
@@ -862,9 +875,11 @@ export class SceneManager {
     };
 
     const fallbackLoad = () => {
+      if (meshFinalized) return;
       fetch(getAssetUrl('/models/tshirt-tdesigner-geo.json'))
         .then(res => res.json())
         .then(geoData => {
+          if (meshFinalized) return;
           const geo = new THREE.BufferGeometry();
           geo.setAttribute('position', new THREE.Float32BufferAttribute(geoData.positions, 3));
           geo.setAttribute('normal', new THREE.Float32BufferAttribute(geoData.normals, 3));
@@ -877,6 +892,7 @@ export class SceneManager {
           finalizeMesh(mesh);
         })
         .catch(err => {
+          if (meshFinalized) return;
           console.warn('Fallback regular tee load error:', err);
           this.modelsLoaded.regular_tee = true;
           this.modelsLoading.regular_tee = false;
@@ -885,6 +901,12 @@ export class SceneManager {
           cbs.forEach(cb => cb());
         });
     };
+
+    fallbackSafetyTimer = setTimeout(() => {
+      if (!meshFinalized && !this.modelsLoaded.regular_tee) {
+        fallbackLoad();
+      }
+    }, 2000);
 
     gltfLoader.load(
       getAssetUrl('/models/tshirt-tdesigner.glb'),
@@ -1366,12 +1388,12 @@ export class SceneManager {
     this.lights.backGraphic = backGraphicLight;
 
     // Balanced Hemisphere Light: provides soft ground bounce reflection
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xd4dbe6, 0.65);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcdd6e4, 0.75);
     this.scene.add(hemiLight);
     this.lights.hemi = hemiLight;
 
     // Soft ambient fill
-    const ambIntensity = preset === 'light' ? 0.30 : (preset === 'custom' ? 0.32 : 0.35);
+    const ambIntensity = preset === 'light' ? 0.35 : (preset === 'custom' ? 0.38 : 0.40);
     const ambLight = new THREE.AmbientLight(0xffffff, ambIntensity);
     this.scene.add(ambLight);
     this.lights.amb = ambLight;
@@ -1576,8 +1598,10 @@ export class SceneManager {
     if (h === '#24272e' || h === '#14161b' || h === '#000000' || h === '#111111' || h === '#181818' || h === '#1a1a1a') return true;
     try {
       const c = new THREE.Color(hex);
-      const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-      return lum < 0.05;
+      const hsl = {};
+      c.getHSL(hsl);
+      // Strictly achromatic and low lightness only: saturation must be very low (< 0.14) so colors like navy and violet are NEVER treated as black
+      return hsl.s < 0.14 && hsl.l < 0.14;
     } catch (e) {
       return false;
     }
@@ -1586,12 +1610,26 @@ export class SceneManager {
   isBlueColor(hex) {
     if (!hex) return false;
     const h = hex.toLowerCase();
-    if (h === '#192848' || h === '#1e3a8a' || h === '#172554') return true;
+    if (h === '#192848' || h === '#1e3a8a' || h === '#172554' || h === '#1a243f' || h === '#15254a' || h === '#1b2a59' || h === '#162752') return true;
     try {
       const c = new THREE.Color(hex);
       const hsl = {};
       c.getHSL(hsl);
-      return hsl.h >= 0.55 && hsl.h <= 0.72 && hsl.l < 0.45;
+      return hsl.h >= 0.52 && hsl.h < 0.72 && hsl.s > 0.14;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  isVioletColor(hex) {
+    if (!hex) return false;
+    const h = hex.toLowerCase();
+    if (h === '#3b185f' || h === '#2e1065' || h === '#2b0938' || h === '#4a1d75' || h === '#3c1b63' || h === '#371858' || h === '#431f6d') return true;
+    try {
+      const c = new THREE.Color(hex);
+      const hsl = {};
+      c.getHSL(hsl);
+      return hsl.h >= 0.72 && hsl.h <= 0.86 && hsl.s > 0.14;
     } catch (e) {
       return false;
     }
@@ -1600,45 +1638,85 @@ export class SceneManager {
   getMaterialPresetForColor(hex) {
     if (!hex) return { ...this.defaultPreset, color: '#ffffff' };
     
-    // Check if black / dark
+    // Check if black / dark neutral
     if (this.isBlackColor(hex)) {
       return {
         color: this.blackPreset.color || '#24272e',
-        roughness: this.blackPreset.roughness !== undefined ? this.blackPreset.roughness : 0.98,
+        roughness: 0.94,
         metalness: 0.0,
-        sheen: this.blackPreset.sheen !== undefined ? this.blackPreset.sheen : 0.15,
-        sheenRoughness: this.blackPreset.sheenRoughness !== undefined ? this.blackPreset.sheenRoughness : 0.75,
-        sheenColor: this.blackPreset.sheenColor || '#3a3a40',
-        normalScale: this.blackPreset.normalScale !== undefined ? this.blackPreset.normalScale : 0.22,
-        aoMapIntensity: 0.60
+        sheen: 0.85,
+        sheenRoughness: 0.48,
+        sheenColor: this.blackPreset.sheenColor || '#424652',
+        specularIntensity: 0.18,
+        normalScale: 0.35,
+        aoMapIntensity: 0.55
       };
     }
 
-    // Check if blue / navy
+    // Check if blue / navy (authentic heavy cotton cloth blue)
     if (this.isBlueColor(hex)) {
+      const c = new THREE.Color(hex);
+      const hsl = {};
+      c.getHSL(hsl);
+      // Lift deep navy so it preserves rich dyed cotton chroma under PBR studio lighting
+      const calibratedL = Math.max(hsl.l, 0.042);
+      const calibratedS = Math.max(hsl.s, 0.65);
+      const clothColor = new THREE.Color().setHSL(hsl.h, calibratedS, calibratedL);
+      // Micro-fiber sheen glow in indigo/navy dyed cloth tone
+      const clothSheen = new THREE.Color().setHSL(hsl.h, Math.max(hsl.s, 0.75), Math.min(calibratedL + 0.048, 0.12));
       return {
-        color: hex,
-        roughness: this.bluePreset.roughness !== undefined ? this.bluePreset.roughness : 0.98,
+        color: '#' + clothColor.getHexString(),
+        roughness: 0.94,
         metalness: 0.0,
-        sheen: this.bluePreset.sheen !== undefined ? this.bluePreset.sheen : 0.15,
-        sheenRoughness: this.bluePreset.sheenRoughness !== undefined ? this.bluePreset.sheenRoughness : 0.75,
-        sheenColor: this.bluePreset.sheenColor || '#304060',
-        normalScale: this.bluePreset.normalScale !== undefined ? this.bluePreset.normalScale : 0.22,
-        aoMapIntensity: 0.60
+        sheen: 0.95,
+        sheenRoughness: 0.48,
+        sheenColor: '#' + clothSheen.getHexString(),
+        specularIntensity: 0.16,
+        normalScale: 0.35,
+        aoMapIntensity: 0.55
       };
     }
 
-    // Soft matte preset for all garment colors
+    // Check if violet / purple (authentic heavy cotton cloth violet)
+    if (this.isVioletColor(hex)) {
+      const c = new THREE.Color(hex);
+      const hsl = {};
+      c.getHSL(hsl);
+      // Lift deep violet so it preserves rich royal purple/violet dye chroma under PBR studio lighting
+      const calibratedL = Math.max(hsl.l, 0.046);
+      const calibratedS = Math.max(hsl.s, 0.65);
+      const clothColor = new THREE.Color().setHSL(hsl.h, calibratedS, calibratedL);
+      // Micro-fiber sheen glow in rich royal violet dyed cloth tone
+      const clothSheen = new THREE.Color().setHSL(hsl.h, Math.max(hsl.s, 0.75), Math.min(calibratedL + 0.052, 0.13));
+      return {
+        color: '#' + clothColor.getHexString(),
+        roughness: 0.94,
+        metalness: 0.0,
+        sheen: 0.95,
+        sheenRoughness: 0.48,
+        sheenColor: '#' + clothSheen.getHexString(),
+        specularIntensity: 0.16,
+        normalScale: 0.35,
+        aoMapIntensity: 0.55
+      };
+    }
+
+    // Authentic matte woven cloth finish for all other garment colors
     const col = new THREE.Color(hex);
+    const hsl = {};
+    col.getHSL(hsl);
+    // Sheen highlights the cloth micro-fibers with dyed fabric tone
+    const sheenColor = col.clone().lerp(new THREE.Color(0xffffff), hsl.l < 0.15 ? 0.25 : 0.15);
     return {
       color: hex,
-      roughness: 0.98,
+      roughness: 0.94,
       metalness: 0.0,
-      sheen: 0.15,
-      sheenRoughness: 0.75,
-      sheenColor: col.clone().lerp(new THREE.Color(0xffffff), 0.35).getHexString(),
-      normalScale: 0.22,
-      aoMapIntensity: 0.60
+      sheen: 0.90,
+      sheenRoughness: 0.48,
+      sheenColor: '#' + sheenColor.getHexString(),
+      specularIntensity: 0.18,
+      normalScale: 0.35,
+      aoMapIntensity: 0.55
     };
   }
 
@@ -1689,6 +1767,14 @@ export class SceneManager {
       if (aoMapIntensity !== undefined && mat.aoMapIntensity !== undefined) {
         mat.aoMapIntensity = aoMapIntensity;
       }
+      if (props.specularIntensity !== undefined && mat.specularIntensity !== undefined) {
+        mat.specularIntensity = props.specularIntensity;
+      }
+      if (sheenColorObj && mat.specularColor) {
+        mat.specularColor.copy(sheenColorObj);
+      }
+      mat.metalness = 0.0;
+      if (mat.clearcoat !== undefined) mat.clearcoat = 0.0;
       mat.side = THREE.DoubleSide;
       mat.needsUpdate = true;
 
@@ -1724,39 +1810,18 @@ export class SceneManager {
     updateMeshColors(this.attachmentsGroup);
   }
 
-  setFabricFinish(finish) {
-    this.fabricFinish = finish;
-    if (this.shirtMaterial) {
-      if (finish === 'heavy_terry') {
-        this.shirtMaterial.roughness = 0.94;
-        this.shirtMaterial.metalness = 0.04;
-      } else if (finish === 'mineral_wash') {
-        this.shirtMaterial.roughness = 0.88;
-        this.shirtMaterial.metalness = 0.08;
-      } else {
-        // combed_cotton
-        this.shirtMaterial.roughness = 0.82;
-        this.shirtMaterial.metalness = 0.05;
-      }
-      this.shirtMaterial.needsUpdate = true;
-    }
-    if (this.designManager) {
-      this.designManager.setFabricFinish(finish);
-    }
-  }
-
   setGarmentColor(hex, immediate = false) {
     let resolvedHex = hex || '#ffffff';
     if (this.isBlackColor(resolvedHex)) {
       resolvedHex = this.blackPreset.color || '#24272e';
     }
+    const preset = this.getMaterialPresetForColor(resolvedHex);
     this.garmentColor = resolvedHex;
 
     if (this.designManager) {
-      this.designManager.setGarmentColor(resolvedHex);
+      this.designManager.setGarmentColor(preset.color || resolvedHex);
     }
 
-    const preset = this.getMaterialPresetForColor(resolvedHex);
     const targetColor = new THREE.Color(preset.color);
     const sheenHex = typeof preset.sheenColor === 'string'
       ? (preset.sheenColor.startsWith('#') ? preset.sheenColor : '#' + preset.sheenColor)
@@ -1779,7 +1844,8 @@ export class SceneManager {
         sheen: preset.sheen,
         sheenRoughness: preset.sheenRoughness,
         normalScale: preset.normalScale,
-        aoMapIntensity: preset.aoMapIntensity
+        aoMapIntensity: preset.aoMapIntensity,
+        specularIntensity: preset.specularIntensity !== undefined ? preset.specularIntensity : 0.18
       });
       this.targetMaterialProps = null;
     } else {
@@ -1790,7 +1856,8 @@ export class SceneManager {
         sheen: preset.sheen,
         sheenRoughness: preset.sheenRoughness,
         normalScale: preset.normalScale,
-        aoMapIntensity: preset.aoMapIntensity
+        aoMapIntensity: preset.aoMapIntensity,
+        specularIntensity: preset.specularIntensity !== undefined ? preset.specularIntensity : 0.18
       };
     }
   }
@@ -2333,12 +2400,13 @@ export class SceneManager {
       color: new THREE.Color(this.garmentColor || '#ffffff'),
       map: this.designManager.texture,
       normalMap: hoodieNormal,
-      normalScale: new THREE.Vector2(0.28, 0.28),
-      roughness: 1.0,
+      normalScale: new THREE.Vector2(0.35, 0.35),
+      roughness: 0.94,
       metalness: 0.0,
-      sheen: 0.0,
+      sheen: 0.95,
+      sheenRoughness: 0.48,
+      specularIntensity: 0.18,
       clearcoat: 0.0,
-      reflectivity: 0.05,
       side: THREE.DoubleSide
     });
     applyInsideFabricShader(this.hoodieFabricMaterial, () => this.garmentColor, null, this.fabricMicroNormalMap, false);
@@ -3013,10 +3081,6 @@ export class SceneManager {
     return await this.setCameraPreset(this.currentCameraView || 'front', this.isZoomed);
   }
 
-  setCameraView(view, isZoomed) {
-    return this.setCameraPreset(view, isZoomed);
-  }
-
   setCameraPreset(view, isZoomed = this.isZoomed) {
     if (typeof isZoomed === 'boolean') {
       this.isZoomed = isZoomed;
@@ -3034,10 +3098,6 @@ export class SceneManager {
       effectiveView = view;
     } else {
       effectiveView = this.currentCameraView || 'front';
-    }
-
-    if (this.tshirtPivot && this.animationMode !== 'turntable' && this.animationMode !== 'rotate_walk') {
-      this.tshirtPivot.rotation.y = 0;
     }
 
     return new Promise((resolve) => {
@@ -3077,13 +3137,9 @@ export class SceneManager {
             break;
           case 'side':
           case 'right':
-          case 'right_sleeve':
-          case 'rsleeve':
             targetPos.set(dist, centerY, 0);
             break;
           case 'left':
-          case 'left_sleeve':
-          case 'lsleeve':
             targetPos.set(-dist, centerY, 0);
             break;
           case 'hero':
@@ -3191,12 +3247,8 @@ export class SceneManager {
     }
 
     // High-precision clock delta
-    // During video recording, use exact deterministic fixed delta for silky-smooth 60/30 FPS motion pacing
-    const fixedRecordingDelta = 1.0 / (this.recordingFps || 30);
     const rawDelta = this.clock.getDelta();
-    const delta = this.isRecordingVideo
-      ? fixedRecordingDelta
-      : Math.min(Math.max(rawDelta, 0.001), 0.05);
+    const delta = Math.min(Math.max(rawDelta, 0.001), 0.05);
 
     // Smooth material preset transition (color, sheenColor, roughness, sheen, normalScale)
     if (this.targetMaterialProps) {
@@ -3386,9 +3438,10 @@ export class SceneManager {
     // Video recording showcase motion: smooth continuous 360° spin loop based on deterministic elapsed time
     if (this.isRecordingVideo && this.recordingMotion === 'showcase360') {
       const isMotionCycle = (this.animationMode === 'walking' || this.animationMode === 'rotate_walk' || this.animationMode === 'waves');
-      this.recordingElapsedSec = (this.recordingElapsedSec || 0) + delta;
       const totalDuration = this.recordingDuration || 5;
-      const progress = Math.min(1.0, this.recordingElapsedSec / totalDuration);
+      const elapsed = Math.max(0, (performance.now() - (this.recordingStartTime || performance.now())) / 1000);
+      this.recordingElapsedSec = elapsed;
+      const progress = Math.min(1.0, elapsed / totalDuration);
       const loops = totalDuration >= 15 ? 2 : 1;
       const targetAngle = (this.recordingBaseAngle || 0) + progress * (2 * Math.PI * loops);
 
@@ -3443,12 +3496,13 @@ export class SceneManager {
 
 
   startVideoRecording({
-    fps = 24,
+    fps = 30,
     durationSeconds = 5,
     format = 'desktop',
     motion = 'current',
     backgroundColor = null,
-    onFrame = null
+    onFrame = null,
+    isScreenSource = false
   } = {}) {
     this.isRecordingVideo = true;
     this.recordingFps = fps;
@@ -3458,6 +3512,7 @@ export class SceneManager {
     this.recordingElapsedSec = 0;
     this.onRecordingFrame = onFrame;
     this.recordingStartTime = performance.now();
+    this.isScreenRecordingSession = isScreenSource;
 
     // Determine the solid studio background color matching active studio lighting
     const isLight = this.backdropMode === 'light';
@@ -3472,11 +3527,6 @@ export class SceneManager {
     const activeCustomTex = this.customBackgroundTexture || this.customBgTexture;
     if (this.backdropMode === 'custom' && activeCustomTex) {
       this.scene.background = activeCustomTex;
-      const imgW = this.customBackgroundImage?.naturalWidth || this.customBackgroundImage?.width || targetW;
-      const imgH = this.customBackgroundImage?.naturalHeight || this.customBackgroundImage?.height || targetH;
-      if (typeof this.fitTextureCover === 'function') {
-        this.fitTextureCover(activeCustomTex, imgW, imgH, targetW, targetH);
-      }
     } else {
       this.scene.background = new THREE.Color(solidBg);
     }
@@ -3486,7 +3536,8 @@ export class SceneManager {
       controlsEnabled: this.controls ? this.controls.enabled : true,
       width: this.width,
       height: this.height,
-      pixelRatio: this.renderer.getPixelRatio()
+      pixelRatio: this.renderer.getPixelRatio(),
+      wasResized: false
     };
     if (this.controls) {
       this.controls.enabled = false;
@@ -3500,23 +3551,19 @@ export class SceneManager {
       0
     );
 
-    let targetW = 1920;
-    let targetH = 1080;
-    if (format === 'mobile') {
-      targetW = 1080;
-      targetH = 1920;
-    } else if (format === 'square') {
-      targetW = 1080;
-      targetH = 1080;
+    // During screen recording or active view recording, preserve native on-screen canvas sizing
+    // to prevent buffer reallocation lag, maintain silky-smooth 60 FPS, and avoid visual popping.
+    if (!isScreenSource && format !== 'current' && (format === 'mobile' || format === 'square')) {
+      const targetW = 1080;
+      const targetH = (format === 'mobile') ? 1920 : 1080;
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(targetW, targetH, false);
+      this.camera.aspect = targetW / targetH;
+      this.camera.updateProjectionMatrix();
+      this.preRecordState.wasResized = true;
     }
 
-    // Resize WebGL rendering context directly for zero-overhead native capture
-    this.renderer.setPixelRatio(1);
-    this.renderer.setSize(targetW, targetH, false);
-    this.camera.aspect = targetW / targetH;
-    this.camera.updateProjectionMatrix();
-
-    // Use renderer canvas directly for captureStream to avoid 2D canvas drawImage lag
+    // Use renderer canvas directly for capture
     this.recordingCanvas = this.renderer.domElement;
   }
 
@@ -3526,6 +3573,7 @@ export class SceneManager {
     this.onRecordingFrame = null;
     this.recordingFrame = 0;
     this.recordingElapsedSec = 0;
+    this.isScreenRecordingSession = false;
 
     // Restore background if modified
     if (this.originalSceneBackground !== undefined) {
@@ -3537,10 +3585,12 @@ export class SceneManager {
       if (this.controls) {
         this.controls.enabled = this.preRecordState.controlsEnabled;
       }
-      this.renderer.setSize(this.preRecordState.width, this.preRecordState.height, false);
-      this.renderer.setPixelRatio(this.preRecordState.pixelRatio);
-      this.camera.aspect = this.preRecordState.width / this.preRecordState.height;
-      this.camera.updateProjectionMatrix();
+      if (this.preRecordState.wasResized) {
+        this.renderer.setSize(this.preRecordState.width, this.preRecordState.height, false);
+        this.renderer.setPixelRatio(this.preRecordState.pixelRatio);
+        this.camera.aspect = this.preRecordState.width / this.preRecordState.height;
+        this.camera.updateProjectionMatrix();
+      }
       this.preRecordState = null;
     }
 
